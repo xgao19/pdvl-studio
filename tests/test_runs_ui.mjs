@@ -20,6 +20,7 @@ function setup(){
    setAttribute(name,value){this[name]=value}
    addEventListener(){}
    scrollIntoView(){}
+   focus(){}
    get firstElementChild(){return this.children[0]}
    remove(){this.parent.children=this.parent.children.filter(c=>c!==this)}
  }
@@ -28,13 +29,16 @@ function setup(){
  }
  const document={hidden:false,getElementById:id=>nodes.get(id),createElement:tag=>new Element(tag),
    querySelectorAll:()=>[],querySelector:()=>new Element(),addEventListener(){}};
- const data={runs:[],events:new Map(),pending:null};
+ const data={runs:[],events:new Map(),pending:null,papers:[],source:null,chat:{answer:'Scoped comparison',meta:{}}};
  async function fetch(url,options={}){
    calls.push({url,options});
    if(url==='/api/models')return new Promise(()=>{}); // Bootstrap is outside this focused UI test.
    if(data.pending&&url==='/api/projects/p/runs')return data.pending;
    let value=[];
    if(url==='/api/projects/p/runs')value=data.runs;
+   else if(url==='/api/projects/p/papers')value=data.papers;
+   else if(url==='/api/projects/p/chat')value=data.chat;
+   else if(url.includes('/artifacts/')&&url.includes('/text?'))value=data.source;
    else if(url.includes('/events?')){
      const [,rid,after]=url.match(/\/runs\/([^/]+)\/events\?after=(\d+)/);
      const entries=(data.events.get(rid)||[]).filter(e=>e.id>Number(after));
@@ -105,4 +109,34 @@ test('Codex uses only the configured model and hides continuation from another r
  assert.match(app.document.getElementById('codexRuntime').textContent,/不使用 ChatGPT 订阅/);
  app.run("fillCodex({configured:false,available:false,detail:'Configure isolated runtime'});");
  assert.equal(app.document.getElementById('launchCodex').disabled,true);assert.equal(picker.value,'');
+});
+
+test('literature selection limits comparison to two papers and sends their actual archive IDs',async()=>{
+ const app=setup();
+ app.data.papers=[1,2,3].map(n=>({id:'a_'+n,title:'Study '+n,page_count:3,arxiv_id:'2301.1234'+n}));
+ await app.run('refreshPapers()');
+ for(const id of ['a_1','a_2','a_3'])app.run(`paperChecks.get('${id}').checked=true;paperChecks.get('${id}').onchange();`);
+ assert.deepEqual([...app.run('selectedPapers')],['a_1','a_2']);
+ assert.equal(app.run("paperChecks.get('a_3').checked"),false);
+ app.document.getElementById('readSelectedPapers').onclick();
+ const question=app.document.getElementById('question').value;
+ assert.match(question,/Study 1/);assert.match(question,/Study 2/);assert.doesNotMatch(question,/Study 3/);
+ await app.run("mode='discuss';send()");
+ const request=app.calls.find(c=>c.url==='/api/projects/p/chat');
+ assert.deepEqual(JSON.parse(request.options.body).paper_ids,['a_1','a_2']);
+});
+
+test('source viewer uses page and offset reading and follows saved evidence page provenance',async()=>{
+ const app=setup();
+ app.data.source={id:'a_paper',page:2,page_count:4,offset:0,next_offset:7000,truncated:true,
+                  text:'Actual original text',sha256:'hash',pdf_artifact_id:'a_pdf',title:'Paper'};
+ await app.run("viewArtifact('a_paper',2)");
+ assert.match(app.calls.at(-1).url,/page=2&offset=0/);
+ assert.equal(app.document.getElementById('sourcePage').value,2);
+ assert.equal(app.document.getElementById('nextSourceChunk').disabled,false);
+ assert.match(app.document.getElementById('modalText').textContent,/Actual original text/);
+ await app.document.getElementById('nextSourceChunk').onclick();
+ assert.match(app.calls.at(-1).url,/page=2&offset=7000/);
+ assert.equal(app.run("evidencePage({provenance:JSON.stringify({paper_source:{pages:[3]}})})"),3);
+ assert.equal(app.run("evidencePage({provenance:'{}'})"),1);
 });

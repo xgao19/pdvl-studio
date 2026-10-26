@@ -1,6 +1,8 @@
 from __future__ import annotations
 import json
 import os
+import xml.etree.ElementTree as ET
+import httpx
 from typing import Literal
 from urllib.parse import quote
 from fastapi import FastAPI, HTTPException, Request, Query
@@ -18,6 +20,9 @@ from .prompts import MODE_PROMPTS, DEFAULT_SCIENTIFIC_VOICE
 from .research import project_snapshot, research_context, citation_ids
 from .providers import pick_model, models_public, generate, ProviderError
 from .verification import check, TESTS
+from .tools import tools_for_mode
+from .papers import list_papers, search_arxiv, import_arxiv, archive_pdf, read_artifact, MAX_PDF_BYTES
+from starlette.concurrency import run_in_threadpool
 from . import __version__
 
 @asynccontextmanager
@@ -47,6 +52,10 @@ class NewMessage(BaseModel):
     mode: Literal["discuss", "investigate", "verify", "write"] = "discuss"
     message: str = Field(min_length=1, max_length=40000)
     model_id: str | None = None
+    paper_ids: list[str] = Field(default_factory=list, max_length=2)
+
+class ImportPaper(BaseModel):
+    arxiv_id: str = Field(min_length=1, max_length=160)
 
 class NewClaim(BaseModel):
     title: str = Field(min_length=1, max_length=200)
@@ -158,18 +167,29 @@ async def chat(pid: str, req: NewMessage):
     prior = rows("SELECT * FROM messages WHERE project_id=? AND mode=? ORDER BY rowid DESC LIMIT 16", (pid, req.mode))
     conversation = [{"role": r["role"], "content": r["content"]} for r in reversed(prior)]
     conversation.append({"role": "user", "content": req.message})
-    context = research_context(project_snapshot(pid), req.mode)
+    snapshot = project_snapshot(pid)
+    context = research_context(snapshot, req.mode)
+    available = {p['id']: p for p in snapshot['papers']}
+    selected = []
+    for aid in dict.fromkeys(req.paper_ids):
+        paper = available.get(aid)
+        if not paper:
+            raise HTTPException(404, 'Selected paper not found in this project')
+        selected.append(paper)
+    if selected:
+        context += '\n\nPapers selected for this question:\n' + json.dumps(selected, ensure_ascii=False)
+        context += '\nRead original pages of every selected paper before analyzing or comparing their findings.'
     if req.mode in ('discuss','write'):
         style=one('SELECT style_text FROM editorial_styles WHERE project_id=?',(pid,))
         context += "\n\nEditorial preference (style guidance, not physical evidence): " + (style['style_text'] if style else DEFAULT_SCIENTIFIC_VOICE)
     try:
         answer, meta = await generate(model, MODE_PROMPTS[req.mode] + "\n\n" + context, conversation,
-                                      project_id=pid, allow_tools=req.mode in ("investigate","verify","write"))
+                                      project_id=pid, tools=tools_for_mode(req.mode))
     except ProviderError as error:
         raise HTTPException(503, str(error))
     with connection() as con:
         timestamp = utcnow()
-        con.execute("INSERT INTO messages(id,project_id,mode,role,content,model_id,created_at,meta_json) VALUES (?,?,?,?,?,?,?,?)", (uid("m"), pid, req.mode, "user", req.message, None, timestamp, '{}'))
+        con.execute("INSERT INTO messages(id,project_id,mode,role,content,model_id,created_at,meta_json) VALUES (?,?,?,?,?,?,?,?)", (uid("m"), pid, req.mode, "user", req.message, None, timestamp, json.dumps({'paper_ids': req.paper_ids})))
         con.execute("INSERT INTO messages(id,project_id,mode,role,content,model_id,created_at,meta_json) VALUES (?,?,?,?,?,?,?,?)", (uid("m"), pid, req.mode, "assistant", answer, model["id"], timestamp, json.dumps(meta, ensure_ascii=False)))
     return {"answer": answer, "meta": meta, "mode": req.mode}
 
@@ -200,6 +220,60 @@ def add_evidence(pid: str, req: NewEvidence):
                                req.provenance, req.artifact_id)
     except LookupError as error:
         raise HTTPException(404, str(error))
+    except ValueError as error:
+        raise HTTPException(422, str(error))
+
+
+@app.get('/api/projects/{pid}/papers')
+def papers(pid: str):
+    project_required(pid)
+    return list_papers(pid)
+
+
+@app.get('/api/projects/{pid}/papers/search')
+async def search_papers(pid: str, query: str = Query(min_length=2, max_length=130)):
+    project_required(pid)
+    try:
+        return await search_arxiv(query)
+    except (httpx.HTTPError, ET.ParseError, ValueError) as error:
+        raise HTTPException(502, f'arXiv search failed ({type(error).__name__}); this is not a negative literature finding')
+
+
+@app.post('/api/projects/{pid}/papers', status_code=201)
+async def import_paper(pid: str, req: ImportPaper):
+    project_required(pid)
+    try:
+        return await import_arxiv(pid, req.arxiv_id)
+    except ValueError as error:
+        raise HTTPException(422, str(error))
+    except (httpx.HTTPError, ET.ParseError) as error:
+        raise HTTPException(502, f'Cannot retrieve arXiv original ({type(error).__name__})')
+
+
+@app.post('/api/projects/{pid}/papers/pdf', status_code=201)
+async def upload_paper(pid: str, request: Request, title: str = Query(min_length=1, max_length=200)):
+    project_required(pid)
+    content = bytearray()
+    async for chunk in request.stream():
+        content.extend(chunk)
+        if len(content) > MAX_PDF_BYTES:
+            raise HTTPException(413, 'PDF exceeds 8 MiB')
+    try:
+        return await run_in_threadpool(archive_pdf, pid, bytes(content), title)
+    except ValueError as error:
+        raise HTTPException(422, str(error))
+
+
+@app.get('/api/projects/{pid}/artifacts/{aid}/text')
+def artifact_text(pid: str, aid: str, page: int = Query(default=1, ge=1),
+                  offset: int = Query(default=0, ge=0), query: str = Query(default='', max_length=150)):
+    project_required(pid)
+    try:
+        return read_artifact(pid, aid, page, offset, query)
+    except LookupError as error:
+        raise HTTPException(404, str(error))
+    except ValueError as error:
+        raise HTTPException(422, str(error))
 
 @app.get("/api/verification-tests")
 def list_verification_tests():
@@ -229,7 +303,7 @@ def run_verification(pid: str, cid: str, test_id: str):
 @app.get("/api/projects/{pid}/runs")
 def list_runs(pid: str):
     project_required(pid)
-    items = rows("SELECT * FROM runs WHERE project_id=? ORDER BY rowid DESC", (pid,))
+    items = rows("SELECT * FROM runs WHERE project_id=? AND agent!='literature' ORDER BY rowid DESC", (pid,))
     try:
         runtime = codex_runtime()
     except ValueError:
@@ -290,6 +364,8 @@ def cancel_run(rid: str):
 def continue_run(rid: str, req: ContinueRun):
     runtime = codex_required()
     parent = get_run(rid)
+    if parent['agent'] != 'codex-sdk':
+        raise HTTPException(409, 'Only Codex tasks can be continued')
     if json.loads(parent['context_json']).get('codex_runtime') != runtime:
         raise HTTPException(409, 'This session belongs to a different Codex runtime; create a new task from its archived findings')
     snapshot = json.dumps({**project_snapshot(parent['project_id']), 'codex_runtime': runtime}, ensure_ascii=False)
@@ -321,7 +397,7 @@ def download_artifact(aid: str):
     artifact = one('SELECT * FROM artifacts WHERE id=?', (aid,))
     if not artifact:
         raise HTTPException(404, 'Artifact not found')
-    return Response(bytes(artifact['content']), media_type='application/octet-stream', headers={
+    return Response(bytes(artifact['content']), media_type='application/pdf' if artifact['name'].endswith('.pdf') else 'application/octet-stream', headers={
         'Content-Disposition': "attachment; filename*=UTF-8''" + quote(artifact['name'], safe=''),
         'X-Content-Type-Options': 'nosniff',
     })

@@ -10,7 +10,7 @@ import signal
 import threading
 from pathlib import Path
 from .config import ROOT, home, codex_environment, codex_runtime
-from .db import connection, utcnow, one, rows, uid, add_run_event
+from .db import connection, utcnow, one, rows, add_run_event, archive_artifacts, ARCHIVE_LIMIT
 from .research import research_context
 
 STOP = threading.Event()
@@ -31,7 +31,7 @@ def pick_pending():
 def collect_artifacts(workdir: Path, inputs: dict[str, bytes]) -> dict[str, bytes]:
     """Archive at most 10 MiB per run. Never follow agent-created symlinks."""
     files = dict(inputs)
-    remaining = 10 * 1024 * 1024 - sum(map(len, files.values()))
+    remaining = ARCHIVE_LIMIT - sum(map(len, files.values()))
     if remaining < 0:
         raise ValueError('Run artifacts exceed the 10 MiB archive limit')
     for directory, dirs, names in os.walk(workdir, followlinks=False):
@@ -104,7 +104,7 @@ def finish_run(item: dict, state: str, output: str, error: str) -> dict:
             log = path / name
             if log.exists():
                 with log.open('rb') as source:
-                    inputs[name] = source.read(10 * 1024 * 1024 + 1)
+                    inputs[name] = source.read(ARCHIVE_LIMIT + 1)
         archived = collect_artifacts(path / 'workspace', inputs)
     except (OSError, ValueError) as exc:
         error = error or f'Artifact archive failed: {exc}'
@@ -132,9 +132,7 @@ def finish_run(item: dict, state: str, output: str, error: str) -> dict:
         if current == 'cancelling':
             state = 'cancelled'
         now = utcnow()
-        for name, content in archived.items():
-            con.execute('INSERT INTO artifacts VALUES (?,?,?,?,?,?)',
-                        (uid('a'), rid, name, content, hashlib.sha256(content).hexdigest(), now))
+        archive_artifacts(con, rid, archived, now)
         con.execute('UPDATE runs SET state=?,updated_at=?,ended_at=?,output=?,error=? WHERE id=?',
                     (state, now, now, output, error, rid))
         message = {'completed': '任务完成，产物已归档', 'cancelled': '任务已取消',

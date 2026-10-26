@@ -7,6 +7,8 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from .config import home
 
+ARCHIVE_LIMIT = 10 * 1024 * 1024
+
 
 def utcnow() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -118,6 +120,18 @@ def add_run_event(con, rid: str, kind: str, message: str):
                 (rid, kind, message[:6000], utcnow()))
 
 
+def archive_artifacts(con, rid: str, files: dict[str, bytes], now: str) -> dict[str, str]:
+    stored = con.execute('SELECT coalesce(sum(length(content)),0) FROM artifacts WHERE run_id=?', (rid,)).fetchone()[0]
+    if stored + sum(map(len, files.values())) > ARCHIVE_LIMIT:
+        raise ValueError('Run artifacts exceed the 10 MiB archive limit')
+    ids = {}
+    for name, content in files.items():
+        ids[name] = uid('a')
+        con.execute('INSERT INTO artifacts VALUES (?,?,?,?,?,?)',
+                    (ids[name], rid, name, content, hashlib.sha256(content).hexdigest(), now))
+    return ids
+
+
 def append_evidence(project_id: str, claim_id: str, kind: str, verdict: str,
                     description: str, provenance: dict | None = None,
                     artifact_id: str | None = None) -> dict:
@@ -127,7 +141,7 @@ def append_evidence(project_id: str, claim_id: str, kind: str, verdict: str,
             raise LookupError("claim not found in project")
         if artifact_id:
             artifact = con.execute(
-                "SELECT a.id,a.run_id,a.name,a.sha256,r.model_id,r.context_json FROM artifacts a "
+                "SELECT a.id,a.run_id,a.name,a.sha256,a.content,r.agent,r.model_id,r.context_json FROM artifacts a "
                 "JOIN runs r ON r.id=a.run_id WHERE a.id=? AND r.project_id=?",
                 (artifact_id, project_id)).fetchone()
             if not artifact:
@@ -136,6 +150,14 @@ def append_evidence(project_id: str, claim_id: str, kind: str, verdict: str,
             provenance = {**(provenance or {}), 'artifact': {
                 key: artifact[key] for key in ('id', 'run_id', 'name', 'sha256', 'model_id')},
                 'context_sha256': hashlib.sha256(artifact['context_json'].encode()).hexdigest()}
+            if artifact['agent'] == 'literature' and artifact['name'] == 'paper.json':
+                paper = json.loads(artifact['content'])
+                pages = provenance.pop('pages', [])
+                if not isinstance(pages, list) or any(type(p) is not int or not 1 <= p <= len(paper['pages']) for p in pages):
+                    raise ValueError('Evidence pages must be PDF page numbers from this paper')
+                provenance['paper_source'] = {key: paper.get(key) for key in
+                                              ('title', 'url', 'arxiv_id', 'pdf_artifact_id', 'pdf_sha256')}
+                provenance['paper_source']['pages'] = sorted(set(pages))
         con.execute("INSERT INTO evidence(id,project_id,claim_id,kind,verdict,description,provenance,created_at,artifact_id) "
                     "VALUES (?,?,?,?,?,?,?,?,?)",
                     (eid, project_id, claim_id, kind, verdict, description,

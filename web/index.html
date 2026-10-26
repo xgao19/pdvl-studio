@@ -22,6 +22,7 @@
     </div>
     <div class="side-section"><span class="overline">RESEARCH LIBRARY</span>
       <button id="openBrief" class="sidebar-link">▤ &nbsp; Scientific brief</button>
+      <button id="openLiterature" class="sidebar-link">▥ &nbsp; 文献精读与对照</button>
       <button id="editStyle" class="sidebar-link">✍ &nbsp; Scientific voice</button>
       <button id="seedProject" class="sidebar-link">⊕ &nbsp; Load CS-kernel example</button>
     </div>
@@ -34,6 +35,15 @@
     </header>
     <div class="main-content">
       <section class="conversation-area">
+        <details id="literaturePanel" class="literature-panel">
+          <summary>文献 · 单篇精读 / 两篇对照</summary>
+          <div class="inline-actions"><input id="paperQuery" aria-label="文献关键词" placeholder="搜索 arXiv 关键词"/><button id="searchPapers" class="secondary compact">搜索文献</button></div>
+          <details id="paperSearchPanel" class="hidden"><summary>搜索结果（仅摘要）</summary><div id="paperSearchResults"></div></details>
+          <div class="inline-actions"><input id="arxivId" aria-label="arXiv ID 或链接" placeholder="arXiv ID 或 abs/pdf 链接"/><button id="importPaper" class="secondary compact">导入原文</button><label class="pdf-upload">上传 PDF <input id="paperPDF" type="file" accept="application/pdf,.pdf" aria-label="上传论文 PDF"/></label></div>
+          <p id="paperStatus" role="status"></p>
+          <div class="inline-actions"><span id="paperSelection">选择一篇精读，或两篇对照</span><button id="readSelectedPapers" class="primary compact" disabled>精读选中文献</button></div>
+          <div id="papers"></div>
+        </details>
         <div class="intro" id="intro"><div class="intro-mark">∇</div><h2>Think beyond the calculation.</h2><p>Discuss nonperturbative QCD naturally. When a question needs a rigorous check, turn it into evidence rather than an engineering report.</p><div class="suggestions"><button class="suggestion" data-q="Can a scheme-independent combination of Collins–Soper kernels provide an independent test of nonperturbative TMD universality?">Explore a universality test</button><button class="suggestion" data-q="What QCD information can Euclidean observables distinguish without an ill-posed spectral reconstruction?">Euclidean-to-Minkowski frontier</button></div></div>
         <div id="timeline" aria-live="polite"></div>
         <div id="runPanel" class="run-panel hidden"><div class="panel-head"><strong>Codex Investigation</strong><span>Runs in an isolated Git workspace</span></div><textarea id="codexQuestion" placeholder="Describe a precise physics problem for Codex to investigate…"></textarea><div class="inline-actions"><select id="codexModel" disabled><option value="">Configure isolated Codex runtime</option></select><button id="launchCodex" class="primary compact">Launch Codex research</button></div><button id="refreshRuns" class="secondary compact">Refresh tasks and artifacts</button><p id="codexRuntime"></p><p id="runConnection" role="status"></p><div id="runs"></div></div>
@@ -44,6 +54,6 @@
   </main>
   <aside id="evidenceRail"><div class="rail-head"><span class="overline">RESEARCH EVIDENCE</span><button class="icon-button" id="refreshEvidence" aria-label="refresh">↻</button></div><div class="rail-insights"><div><strong id="claimCount">0</strong><small>CLAIMS</small></div><div><strong id="evidenceCount">0</strong><small>EVIDENCE</small></div></div><div id="claims"></div><div class="rail-add"><span class="overline">NEW HYPOTHESIS</span><input id="claimTitle" placeholder="Short title"/><textarea id="claimStatement" placeholder="Precise proposition and assumptions…"></textarea><button id="addClaim" class="secondary compact">+ Record as idea</button></div><div class="footnote">A saved idea is not a verified result. Only scoped physical tests and independent evidence can justify promotion.</div></aside>
 </div>
-<div class="modal-backdrop hidden" id="modal"><div class="modal"><div class="modal-head"><strong id="modalTitle">Research Brief</strong><button id="closeModal" class="icon-button">✕</button></div><pre id="modalText"></pre><textarea id="modalEditor" class="hidden" rows="14" aria-label="Editorial style"></textarea><div class="inline-actions"><button class="primary compact" id="saveModal" style="display:none">Save scientific voice</button><button class="primary compact" id="copyModal">Copy text</button></div></div></div>
+<div class="modal-backdrop hidden" id="modal"><div class="modal"><div class="modal-head"><strong id="modalTitle">Research Brief</strong><button id="closeModal" class="icon-button">✕</button></div><div id="sourceControls" class="hidden"><div class="inline-actions"><label>页码 <input id="sourcePage" type="number" min="1" value="1" aria-label="原文页码"/></label><button id="readSourcePage" class="secondary compact">读取此页</button><button id="nextSourceChunk" class="secondary compact">继续本页</button><a id="sourcePDF">下载原始 PDF</a></div><div class="inline-actions"><input id="sourceQuery" placeholder="在整篇原文中查找关键词"/><button id="findSourceText" class="secondary compact">查找原文</button></div></div><pre id="modalText"></pre><textarea id="modalEditor" class="hidden" rows="14" aria-label="Editorial style"></textarea><div class="inline-actions"><button class="primary compact" id="saveModal" style="display:none">Save scientific voice</button><button class="primary compact" id="copyModal">Copy text</button></div></div></div>
 </body>
 </html>

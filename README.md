@@ -6,7 +6,7 @@ One GitHub repository, one local web workspace, and independent research state. 
 
 ### At a glance
 
-- **Discuss:** ChatGPT-like natural theoretical-physics dialogue; hypothesis-friendly, no default engineering prose.
+- **Discuss:** natural theoretical-physics dialogue, arXiv search and archived-paper reading; select one paper for close reading or two for comparison.
 - **Investigate:** deep reasoning chat plus optional sandboxed Codex SDK task runs.
 - **Verify:** narrow executable QFT checks and immutable evidence records; explicitly distinguishes a formal identity from physical observability.
 - **Write:** separate scientific-writing prompt, manuscript notebook and revision history and editable per-project **Scientific Voice**; prose does not simply rewrite Codex logs.
@@ -60,6 +60,15 @@ In **Investigate**, task cards automatically show new progress while work is act
 
 The implementation adds one artifact table and reuses the existing revision reference field. Archives are limited to 10 MiB per run and reject symlinks. See [Architecture](docs/ARCHITECTURE.md) for the storage contract and migration behavior. Offline tests exercise the complete chain with a local mock agent; real provider/Codex authentication still requires separate testing.
 
+### Read and compare papers (source development version)
+
+1. Open **文献精读与对照**. Search arXiv keywords and import a result, paste an arXiv ID/abs/pdf link, or upload a text-layer PDF.
+2. Select one paper and choose **精读这篇**, or select two and choose **对照这两篇**. Review the prepared question and send it in Discuss. The existing configured model, including Ollama, reads relevant original pages with tools.
+3. Inspect **原文读取记录** or click a page citation. Read by PDF page number, search keywords across the document, or continue a long page. Download the archived PDF to inspect equations and figures.
+4. Save a claim, expand **登记为文献证据** on its source paper, specify the page and interpretation, then record evidence. In Write, cite that evidence and save a revision through the existing workflow.
+
+Search results contain abstracts; importing preserves original PDF bytes and separately extracted page text with SHA-256 hashes. The reader reports partial scope and does not automatically verify claims. PDFs are limited to 8 MiB / 150 pages; scanned or encrypted files require preparation before import. No OCR, image interpretation or arbitrary publisher-URL fetching is implemented. The previously published Intel preview is unchanged; these features are currently validated from source.
+
 ### Run tests
 
 ```bash
@@ -71,7 +80,9 @@ node --test tests/test_runs_ui.mjs
 
 Testing the actual Codex runtime and real provider responses requires authorized API credentials and runtime dependencies; unit and API tests use isolated temporary databases and mocked model responses.
 
-Local integration validation on 2026-10-26: Codex SDK/CLI 0.164.0 with Ollama Cloud `deepseek-v4.1-flash:1017` created files, ran SymPy and checked a cancellation identity (`0`) with a negative control (`epsilon`). A foreground heartbeat task was cancelled and stopped; the same session resumed in a restored workspace and reran the symbolic checks. Archived hashes and the evidence → manuscript citation chain were checked, while the claim remained `idea`. Normal Codex config/auth hashes were unchanged and its ChatGPT login remained active. A final real command verified credential variables were absent from the shell environment; shell snapshots are disabled, and the key scan matched only the ignored `.env`. This validates the local pair and bounded tasks, not every CLI tool or model capability. Private runs remain under `.local/`. The offline suite has 38 Python tests and 4 Node UI tests.
+Local integration validation on 2026-10-26: Codex SDK/CLI 0.164.0 with Ollama Cloud `deepseek-v4.1-flash:1017` created files, ran SymPy and checked a cancellation identity (`0`) with a negative control (`epsilon`). A foreground heartbeat task was cancelled and stopped; the same session resumed in a restored workspace and reran the symbolic checks. Archived hashes and the evidence → manuscript citation chain were checked, while the claim remained `idea`. Normal Codex config/auth hashes were unchanged and its ChatGPT login remained active. A final real command verified credential variables were absent from the shell environment; shell snapshots are disabled, and the key scan matched only the ignored `.env`. This validates the local pair and bounded tasks, not every CLI tool or model capability. Private runs remain under `.local/`. The current offline suite has 61 Python tests and 6 Node UI tests.
+
+Literature validation on 2026-10-26 used the same Ollama model to search arXiv and read 2206.01105v1 (5 pages) and 2003.06063v2 (22 pages). Single-paper reading inspected PDF pages 1–3; comparison inspected both originals and continued a long page at offset 7000. Browser checks covered PDF upload/deduplication, page-link opening, evidence registration against PDF page 3, manuscript saving and source restoration after a service restart. Original PDF/text hashes were checked. The first search result exceeded the import limit and was explicitly rejected. Formula/figure interpretation still needs original-PDF review. No desktop package or release was updated.
 
 ### Source layout
 
@@ -98,7 +109,7 @@ Or create an empty GitHub repository manually and `git push`. The system runs in
 
 ### Important scope boundaries
 
-This release is a **working integrated foundation**, not a finished scientific search engine: full-paper ingestion, remote auth, HPC scheduling, multi-user access, PDF citation resolution and production cost accounting remain unimplemented. Live checks above cover specific local models and small tasks. Do not expose this unauthenticated local app on a public interface.
+This is a **working integrated foundation**: arXiv/PDF text ingestion and page citations are implemented in the source development version. OCR, equation/figure reconstruction, arbitrary publisher access, remote auth, HPC scheduling, multi-user access and production cost accounting remain unimplemented. Live checks cover specific local models and bounded tasks. Do not expose this unauthenticated local app on a public interface.
 
 See [Architecture](docs/ARCHITECTURE.md), [Provider details](docs/PROVIDERS.md) and [Research protocol](docs/RESEARCH_PROTOCOL.md).
 

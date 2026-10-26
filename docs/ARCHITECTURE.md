@@ -21,7 +21,7 @@ flowchart TD
 
 ## Separation by capability, not brand
 
-**Inference provider adapter**: text/reasoning interaction, native Responses. Do not assume server-side tool availability is uniform between OpenAI and DeepSeek. `configs/models.json` maps human-readable model aliases to actual provider IDs. The public UI picker shows missing keys but never exposes secrets.
+**Inference provider adapter**: text/reasoning interaction through native Responses or Chat Completions. Do not assume server-side tool availability is uniform between providers. `configs/models.json` maps human-readable model aliases to actual provider IDs. The public UI picker shows missing keys but never exposes secrets.
 
 **Agent runtime adapter**: Codex is currently first. It is treated as a distinct *harness* that may itself use OpenAI or DeepSeek models. Future providers such as OpenCode, Pi, or dedicated physics agents should implement the same task-to-artifact contract, NOT replace the research database.
 
@@ -37,7 +37,19 @@ The worker archives original question/context bytes, response, event/stderr logs
 
 Users explicitly register an artifact against a claim through `POST /api/projects/{pid}/evidence` with `artifact_id`, an interpretation and a verdict. `evidence.artifact_id` is the source relation; the service records the archive hash, run/model identity and context hash in provenance. A supporting interpretation does not change the claim's scientific status. There is no automatic evidence creation from an agent response.
 
-Manuscripts cite sources inline as `[evidence:e_...]`. Saving extracts and validates those IDs against the same project and derives `revisions.evidence_refs`; clients do not submit a parallel reference list. An unknown or cross-project citation rejects the entire revision. Each returned revision includes resolved `sources` linking evidence → claim → artifact → run; prior revisions retain their own citations. Investigate, Verify and Write can use the read-only `read_research_artifact` tool to inspect archived UTF-8 source text (bounded to 8,000 characters, with a truncation flag). Binary artifacts remain downloadable.
+Manuscripts cite sources inline as `[evidence:e_...]`. Saving extracts and validates those IDs against the same project and derives `revisions.evidence_refs`; clients do not submit a parallel reference list. An unknown or cross-project citation rejects the entire revision. Each returned revision includes resolved `sources` linking evidence → claim → artifact → run; prior revisions retain their own citations. All four modes can inspect archived source text through `read_research_artifact`, using an offset to continue beyond its 7,000-character chunks. Serialized tool results are kept intact rather than sliced into invalid JSON. Binary artifacts remain downloadable.
+
+## Literature search, close reading and comparison
+
+`pdvl/papers.py` owns arXiv metadata search, explicit-version PDF retrieval, PDF text extraction and the canonical source reader shared by the UI and model tools. The two import inputs are arXiv IDs/abs/pdf links and uploaded PDFs; arbitrary URL fetching is not supported. Metadata requests are serialized at three-second intervals. Retrieval failures remain explicit errors, not negative scientific findings.
+
+An import is a completed `runs` record with `agent=literature` and no model identity. It archives `original.pdf` and `paper.json` (bibliographic metadata, original PDF hash/ID and ordered extracted page texts) through the same artifact writer as Codex. No literature table, vector database, alternate evidence ledger or agent execution is added. Reimporting identical PDF bytes in a project reuses its archive. New arXiv versions retain separate sources. Literature imports appear in the paper library rather than the Codex queue; snapshots include paper metadata without embedding entire PDFs.
+
+The reader supports PDF page positions, character offsets within a page, and keyword searches returning matching page snippets. Original-page Markdown links open the same project-scoped reader in the page; the original PDF is downloadable for equation/figure inspection. Chat metadata records selected paper IDs and actual read-page/offset traces. Discuss exposes literature/claim-reading tools and the archive-only import operation, but cannot run named physics checks. The provider enforces the advertised tool allowlist, shares argument/result handling between its two protocols, and reserves its eighth model call for a final answer identifying any unread scope.
+
+The UI selects one paper for close reading or two for comparison; selected papers are validated against the project before inference. Reading/importing never creates claims or evidence. Users explicitly attach an archived paper to a claim with `kind=literature`, an interpretation, verdict and PDF page number. The service validates page bounds and derives the original PDF identity from the archive. Those evidence IDs use the existing manuscript revision/citation path. An original-page link identifies a source; it is not an accepted evidence record or a proof.
+
+The initial scope is text-layer PDFs of at most 8 MiB and 150 pages, within the existing 10 MiB combined archive budget. Scanned/encrypted or unreadable files fail explicitly. Extraction does not reconstruct figures or guarantee mathematical typography; blank/garbled text and unexamined pages must not be described as a full-paper review. This feature uses the existing configured API, including Ollama, and does not change Codex/ChatGPT authentication or publish a desktop release.
 
 Startup adds the artifact table and the two new columns to existing databases without rewriting research records. Historical references remain stored. Previously queued tasks without a context snapshot fail explicitly and must be recreated; no present-day context is silently substituted for a missing historical input.
 

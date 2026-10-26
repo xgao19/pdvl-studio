@@ -3,6 +3,8 @@ const $ = id => document.getElementById(id);
 let project = null, mode = "discuss", models = [], defaults = {}, lastAnswer = "";
 const modelSelections = {};
 let projectClaims = [], projectEvidence = [], activeProject = null;
+let projectPapers = [], sourceView = null;
+const selectedPapers = new Set(), paperChecks = new Map();
 const runViews = new Map();
 let runEpoch = 0, runTimer = null, runRequest = null;
 const activeRun = r => ['queued','running','cancelling'].includes(r.state);
@@ -63,34 +65,43 @@ async function switchMode(next){
  if(activeProject!==project){
    activeProject=project;lastAnswer='';runViews.clear();$('runs').replaceChildren();$('docTitle').value='';$('docText').value='';$('documentSources').replaceChildren();
    $('documentSelect').replaceChildren();
+   selectedPapers.clear();projectPapers=[];$('papers').replaceChildren();$('paperSearchResults').replaceChildren();$('paperSearchPanel').classList.add('hidden');$('paperStatus').textContent='';closeModal();
  }
  mode=next;
  document.querySelectorAll('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.mode===mode));
  $('modeCaption').textContent=modes[mode][0];$('modeTitle').innerHTML=modes[mode][1];$('question').placeholder=modes[mode][2];
  $('runPanel').classList.toggle('hidden',mode!=='investigate');$('manuscriptPanel').classList.toggle('hidden',mode!=='write');
- fillModels();await refreshMessages();await refreshEvidence();if(mode==='investigate')await refreshRuns();if(mode==='write')await refreshDocuments();
+ fillModels();await refreshMessages();await refreshEvidence();await refreshPapers();if(mode==='investigate')await refreshRuns();if(mode==='write')await refreshDocuments();
 }
 async function refreshMessages(){
  if(!project)return;
  const messages=await api(`/projects/${project}/messages?mode=${mode}`);$('timeline').replaceChildren();
  $('intro').classList.toggle('hidden',messages.length>0||mode==='investigate');
- for(const item of messages)appendMessage(item.role,item.content,item.model_id);
+ for(const item of messages)appendMessage(item.role,item.content,item.model_id,JSON.parse(item.meta_json||'{}'));
  scrollToBottom();
 }
-function appendMessage(role,body,modelId){
+function appendMessage(role,body,modelId,meta={}){
  const msg=element('article','msg '+role);const avatar=element('div','avatar');avatar.textContent=role==='assistant'?'∇':'U';
  const right=element('div','msg-body');const head=element('div','msg-header');const label=element('strong');label.textContent=role==='assistant'?'PDVL / '+(models.find(x=>x.id===modelId)?.title||modelId||'Research model'):'You';head.appendChild(label);
- const content=element('div','message-content');renderMarkdown(content,body);right.append(head,content);msg.append(avatar,right);$('timeline').appendChild(msg);return msg;
+ const content=element('div','message-content');renderMarkdown(content,body);right.append(head,content);
+ const reads=(meta.tools||[]).filter(t=>t.source);
+ if(reads.length){const details=element('details','source-reads');details.appendChild(text(element('summary'),'原文读取记录'));
+   for(const t of reads)details.appendChild(action(`${t.source.artifact_id} · p.${t.source.page} · offset ${t.source.offset}`,()=>viewArtifact(t.source.artifact_id,t.source.page,t.source.offset)));
+   right.appendChild(details);
+ }
+ msg.append(avatar,right);$('timeline').appendChild(msg);return msg;
 }
 function scrollToBottom(){const area=document.querySelector('.conversation-area');area.scrollTop=area.scrollHeight}
 async function send(){
  const q=$('question').value.trim();if(!project||!q)return;
+ const pid=project,sentMode=mode,modelId=$('model').value;
  $('send').disabled=true;$('question').disabled=true;$('intro').classList.add('hidden');
  const optimistic=appendMessage('user',q);const loading=appendMessage('assistant','Thinking through the physics…');
  scrollToBottom();
  try{
-   const result=await post(`/projects/${project}/chat`,{message:q,mode,model_id:$('model').value});
-   loading.remove();appendMessage('assistant',result.answer,$('model').value);lastAnswer=result.answer;$('question').value='';
+   const result=await post(`/projects/${pid}/chat`,{message:q,mode:sentMode,model_id:modelId,paper_ids:[...selectedPapers]});
+   if(pid!==project||sentMode!==mode)return;
+   loading.remove();appendMessage('assistant',result.answer,modelId,result.meta);lastAnswer=result.answer;$('question').value='';await refreshPapers();
  }catch(e){loading.remove();optimistic.remove();notify(e.message)}
  finally{$('send').disabled=false;$('question').disabled=false;scrollToBottom();$('question').focus()}
 }
@@ -112,17 +123,22 @@ async function refreshEvidence(){
  }
 }
 function action(label,handler){const b=text(element('button'),label);b.onclick=()=>Promise.resolve().then(handler).catch(e=>notify(e.message));return b}
-async function viewArtifact(id){
- const response=await fetch('/api/artifacts/'+encodeURIComponent(id));
- if(!response.ok)throw new Error('Cannot read archived artifact');
- const body=new TextDecoder('utf-8',{fatal:true}).decode(await response.arrayBuffer());
- openModal('Archived source',body);
+async function viewArtifact(id,page=1,offset=0){
+ const pid=project;
+ const source=await api(`/projects/${pid}/artifacts/${encodeURIComponent(id)}/text?page=${page}&offset=${offset}`);
+ if(pid!==project)return;
+ openModal(source.title||'Archived source',`PDF page ${source.page} / ${source.page_count} · offset ${source.offset}\nSHA-256: ${source.sha256}\n${source.url||''}\n${source.notice||''}\n\n${source.text}${source.truncated?'\n\n[本页未读完，点击“继续本页”]':''}`);
+ sourceView={id,pid,...source};$('sourcePage').value=page;$('sourcePage').max=source.page_count;
+ $('nextSourceChunk').disabled=source.next_offset===null;
+ $('sourcePDF').classList.toggle('hidden',!source.pdf_artifact_id);$('sourcePDF').href='/api/artifacts/'+encodeURIComponent(source.pdf_artifact_id||'');
+ $('sourceControls').classList.remove('hidden');
 }
+function evidencePage(e){return JSON.parse(e.provenance||'{}').paper_source?.pages?.[0]||1}
 function evidenceCard(e){
  const card=element('div','evidence-entry');
  card.appendChild(text(element('p'),`${e.verdict} · ${e.description}`));
  card.appendChild(action('Inspect evidence',()=>openModal('Evidence '+e.id,JSON.stringify(e,null,2))));
- if(e.artifact_id)card.appendChild(action('View archived source',()=>viewArtifact(e.artifact_id)));
+ if(e.artifact_id)card.appendChild(action('View archived source',()=>viewArtifact(e.artifact_id,evidencePage(e))));
  if(mode==='write')card.appendChild(action('Cite in manuscript',()=>{
    const editor=$('docText'),marker=`[evidence:${e.id}]`,start=editor.selectionStart,end=editor.selectionEnd;
    editor.setRangeText(marker,start,end,'end');editor.focus();renderDocumentSources();
@@ -135,7 +151,7 @@ function renderDocumentSources(sources=projectEvidence){
  for(const id of new Set(ids)){
    const source=sources.find(e=>e.id===id),line=element('div','evidence-entry');
    line.appendChild(text(element('span'),source?`${id} · ${source.verdict} · ${source.description}`:`Unknown citation: ${id}`));
-   if(source?.artifact_id)line.appendChild(action('View archived source',()=>viewArtifact(source.artifact_id)));
+   if(source?.artifact_id)line.appendChild(action('View archived source',()=>viewArtifact(source.artifact_id,evidencePage(source))));
    $('documentSources').appendChild(line);
  }
 }
@@ -145,10 +161,10 @@ async function verify(c){
  catch(e){notify(e.message)}
 }
 async function saveClaim(){const statement=$('claimStatement').value.trim(),title=$('claimTitle').value.trim()||'New hypothesis';if(!statement)return notify('Enter a physical proposition first');
- try{await post(`/projects/${project}/claims`,{title,statement,kind:'general'});$('claimStatement').value='';$('claimTitle').value='';await refreshEvidence()}catch(e){notify(e.message)}
+ try{await post(`/projects/${project}/claims`,{title,statement,kind:'general'});$('claimStatement').value='';$('claimTitle').value='';await refreshEvidence();await refreshPapers()}catch(e){notify(e.message)}
 }
 async function saveFromComposer(){const statement=$('question').value.trim();if(!statement)return notify('Write a hypothesis in the composer first');
- try{await post(`/projects/${project}/claims`,{title:statement.slice(0,70),statement});notify('Saved as an unverified research idea');await refreshEvidence()}catch(e){notify(e.message)}
+ try{await post(`/projects/${project}/claims`,{title:statement.slice(0,70),statement});notify('Saved as an unverified research idea');await refreshEvidence();await refreshPapers()}catch(e){notify(e.message)}
 }
 function createRunView(r,pid){
  const box=element('div','run-entry');box.id='run-'+r.id;
@@ -181,21 +197,27 @@ function renderRunArtifacts(view,artifacts,pid){
    const line=element('div');line.appendChild(action(a.name,()=>viewArtifact(a.id)));
    const link=text(element('a'),'Download');link.href='/api/artifacts/'+encodeURIComponent(a.id);line.appendChild(link);view.archives.appendChild(line);
  }
- if(artifacts.length&&projectClaims.length){
+ if(artifacts.length&&projectClaims.length)view.archives.appendChild(evidenceForm(artifacts,pid));
+}
+function evidenceForm(artifacts,pid,paper=null){
+   const form=element('div');
    const source=element('select'),claim=element('select'),kind=element('select'),verdict=element('select'),description=element('textarea');
    kind.setAttribute('aria-label','Evidence kind');source.setAttribute('aria-label','Source artifact');claim.setAttribute('aria-label','Claim');verdict.setAttribute('aria-label','Evidence verdict');
    for(const a of artifacts){const option=text(element('option'),a.name);option.value=a.id;source.appendChild(option)}
    source.value=(artifacts.find(a=>a.name==='workspace/findings.md')||artifacts[0]).id;
    for(const c of projectClaims){const option=text(element('option'),c.title);option.value=c.id;claim.appendChild(option)}
-   for(const value of ['derivation','numerical','note']){const option=text(element('option'),value);option.value=value;kind.appendChild(option)}
+   for(const value of ['literature','derivation','numerical','note']){const option=text(element('option'),value);option.value=value;kind.appendChild(option)}
+   kind.value=paper?'literature':'derivation';
    for(const value of ['unresolved','supporting','challenging']){const option=text(element('option'),value);option.value=value;verdict.appendChild(option)}
    description.placeholder='Explain how this source bears on the selected claim';
-   view.archives.append(source,claim,kind,verdict,description,action('Record as evidence',async()=>{
+   const page=element('input');page.type='number';page.min=1;page.max=paper?.page_count||1;page.value=1;page.setAttribute('aria-label','Source page');
+   if(paper){form.append(text(element('span'),'来源页码：'),page)}
+   form.append(source,claim,kind,verdict,description,action('Record as evidence',async()=>{
      if(!description.value.trim())throw new Error('Describe the evidence before recording it');
-     await post(`/projects/${pid}/evidence`,{claim_id:claim.value,artifact_id:source.value,kind:kind.value,verdict:verdict.value,description:description.value.trim()});
+     await post(`/projects/${pid}/evidence`,{claim_id:claim.value,artifact_id:source.value,kind:kind.value,verdict:verdict.value,description:description.value.trim(),provenance:paper?{pages:[Number(page.value)]}:{}});
      description.value='';await refreshEvidence();notify('Evidence recorded; claim status unchanged');
    }));
- }
+   return form;
 }
 function refreshRuns(){
  if(mode!=='investigate'||document.hidden)return Promise.resolve();
@@ -268,10 +290,76 @@ async function loadDocument(){
 }
 async function saveDocument(){const title=$('docTitle').value.trim()||'Untitled research manuscript';const source=$('docText').value.trim();if(!source)return notify('Enter draft text first');
  try{const result=await post(`/projects/${project}/documents`,{title,text:source,document_id:$('documentSelect').value||null});await refreshDocuments();$('documentSelect').value=result.document.id;renderDocumentSources(result.revisions[0].sources);notify(`Saved revision ${result.document.latest_revision}`)}catch(e){notify(e.message)}}
-function openModal(title,body){$('modalTitle').textContent=title;$('modalText').textContent=body;$('modalText').classList.remove('hidden');$('modalEditor').classList.add('hidden');$('saveModal').style.display='none';$('copyModal').style.display='block';$('modal').classList.remove('hidden')}
-async function openStyle(){const s=await api(`/projects/${project}/style`);$('modalTitle').textContent='Scientific voice — project style';$('modalText').classList.add('hidden');$('modalEditor').classList.remove('hidden');$('modalEditor').value=s.style_text;$('saveModal').style.display='block';$('copyModal').style.display='none';$('modal').classList.remove('hidden')}
+function openModal(title,body){sourceView=null;$('sourceControls').classList.add('hidden');$('modalTitle').textContent=title;$('modalText').textContent=body;$('modalText').classList.remove('hidden');$('modalEditor').classList.add('hidden');$('saveModal').style.display='none';$('copyModal').style.display='block';$('modal').classList.remove('hidden')}
+async function openStyle(){const s=await api(`/projects/${project}/style`);openModal('Scientific voice — project style','');$('modalText').classList.add('hidden');$('modalEditor').classList.remove('hidden');$('modalEditor').value=s.style_text;$('saveModal').style.display='block';$('copyModal').style.display='none'}
 async function saveStyle(){try{await api(`/projects/${project}/style`,{method:'PUT',body:JSON.stringify({style_text:$('modalEditor').value})});closeModal();notify('Scientific voice saved for this research project')}catch(e){notify(e.message)}}
 function closeModal(){$('modal').classList.add('hidden')}
+
+function updatePaperSelection(){
+ for(const [id,check] of paperChecks)check.checked=selectedPapers.has(id);
+ $('paperSelection').textContent=`已选择 ${selectedPapers.size} 篇 · 选中原文会随问题提供给模型按需读取`;
+ $('readSelectedPapers').disabled=!selectedPapers.size;
+ $('readSelectedPapers').textContent=selectedPapers.size===2?'对照这两篇':'精读这篇';
+}
+async function refreshPapers(){
+ const pid=project,papers=await api(`/projects/${pid}/papers`);if(pid!==project)return;
+ projectPapers=papers;
+ for(const id of selectedPapers)if(!papers.some(p=>p.id===id))selectedPapers.delete(id);
+ $('papers').replaceChildren();paperChecks.clear();
+ for(const paper of papers){
+   const card=element('div','paper-card');card.id='paper-'+paper.id;
+   const label=element('label'),check=element('input');check.type='checkbox';check.setAttribute('aria-label','选择文献 '+paper.title);paperChecks.set(paper.id,check);
+   check.onchange=()=>{if(check.checked){if(selectedPapers.size===2){check.checked=false;return notify('一次选择一篇精读或两篇对照')}selectedPapers.add(paper.id)}else selectedPapers.delete(paper.id);updatePaperSelection()};
+   label.append(check,text(element('strong'),paper.title));card.appendChild(label);
+   card.appendChild(text(element('p'),`${paper.arxiv_id||'上传 PDF'} · ${paper.page_count} 页 · ${paper.id}`));
+   card.appendChild(action('阅读原文',()=>viewArtifact(paper.id)));
+   if(projectClaims.length){const details=element('details');details.append(text(element('summary'),'登记为文献证据'),evidenceForm([{id:paper.id,name:paper.title}],pid,paper));card.appendChild(details)}
+   else card.appendChild(text(element('p'),'先在右侧保存研究主张，再将相关页登记为证据。'));
+   $('papers').appendChild(card);
+ }
+ updatePaperSelection();
+}
+async function importPaper(value){
+ const pid=project;$('paperStatus').textContent='正在获取原始 PDF 并归档分页文本…';
+ try{const paper=await post(`/projects/${pid}/papers`,{arxiv_id:value});if(pid!==project)return;
+   if(selectedPapers.size<2)selectedPapers.add(paper.id);await refreshPapers();$('paperSearchPanel').open=false;$('paperStatus').textContent='原文已归档，可选择精读或对照。';
+ }catch(e){if(pid===project)$('paperStatus').textContent=e.message}
+}
+$('openLiterature').onclick=async()=>{try{await switchMode('discuss');$('literaturePanel').open=true;$('paperQuery').focus()}catch(e){notify(e.message)}};
+$('searchPapers').onclick=async()=>{
+ const pid=project;$('searchPapers').disabled=true;$('paperStatus').textContent='正在搜索 arXiv…';$('paperSearchResults').replaceChildren();$('paperSearchPanel').classList.remove('hidden');$('paperSearchPanel').open=true;
+ try{const data=await api(`/projects/${pid}/papers/search?query=${encodeURIComponent($('paperQuery').value.trim())}`);if(pid!==project)return;
+   for(const p of data.results){const card=element('div','paper-card');card.append(text(element('strong'),p.title),text(element('p'),`${p.arxiv_id} · ${p.date}`),text(element('p'),p.abstract),action('导入这篇原文',()=>importPaper(p.arxiv_id)));$('paperSearchResults').appendChild(card)}
+   $('paperStatus').textContent='搜索仅返回摘要；导入原文后才能精读。';
+ }catch(e){if(pid===project)$('paperStatus').textContent=e.message}finally{$('searchPapers').disabled=false}
+};
+$('importPaper').onclick=()=>importPaper($('arxivId').value.trim());
+$('paperPDF').onchange=async()=>{
+ const file=$('paperPDF').files[0],pid=project;if(!file)return;
+ $('paperStatus').textContent='正在提取 PDF 分页文本…';
+ try{if(file.size>8*1024*1024)throw new Error('PDF 最大为 8 MiB');
+   const paper=await api(`/projects/${pid}/papers/pdf?title=${encodeURIComponent(file.name.slice(0,200))}`,{method:'POST',headers:{'Content-Type':'application/pdf'},body:await file.arrayBuffer()});
+   if(pid!==project)return;if(selectedPapers.size<2)selectedPapers.add(paper.id);await refreshPapers();$('paperStatus').textContent='PDF 原件与分页文本已归档。';
+ }catch(e){if(pid===project)$('paperStatus').textContent=e.message}finally{$('paperPDF').value=''}
+};
+$('readSelectedPapers').onclick=()=>{
+ const papers=projectPapers.filter(p=>selectedPapers.has(p.id));if(!papers.length)return;
+ const task=papers.length===2?'请对照这两篇论文，围绕共同的物理问题核对定义、约定、假设、方法和结论，指出分歧的来源与尚不能判定之处。':'请精读这篇论文，围绕物理问题、关键定义与假设、推导方法和主要结果展开讨论。';
+ $('question').value=task+'必须实际读取相关原文页，并用工具返回的原文页码链接引用。明确已读范围，不能把摘要或局部阅读说成通读全文。\n'+papers.map(p=>`${p.title}（${p.id}）`).join('\n');$('question').focus();
+};
+$('readSourcePage').onclick=()=>viewArtifact(sourceView.id,Number($('sourcePage').value)).catch(e=>notify(e.message));
+$('nextSourceChunk').onclick=()=>viewArtifact(sourceView.id,sourceView.page,sourceView.next_offset).catch(e=>notify(e.message));
+$('findSourceText').onclick=async()=>{
+ const q=$('sourceQuery').value.trim(),view=sourceView;if(!q||!view)return;
+ try{const data=await api(`/projects/${view.pid}/artifacts/${view.id}/text?query=${encodeURIComponent(q)}`);
+   if(view!==sourceView||view.pid!==project)return;
+   $('modalText').textContent=(data.matches||[]).map(m=>`PDF page ${m.page} · offset ${m.offset}\n${m.excerpt}`).join('\n\n')||'未找到匹配的抽取文本；这不证明原文不存在相关内容。';
+ }catch(e){notify(e.message)}
+};
+$('timeline').addEventListener('click',event=>{
+ const link=event.target.closest('a'),match=link?.getAttribute('href')?.match(/^\/api\/artifacts\/(a_\w+)(?:#page=(\d+))?$/);if(!match)return;
+ event.preventDefault();viewArtifact(match[1],Number(match[2]||1)).catch(e=>notify(e.message));
+});
 $('modes').addEventListener('click',e=>{const b=e.target.closest('[data-mode]');if(b)switchMode(b.dataset.mode).catch(err=>notify(err.message))});
 $('model').addEventListener('change',()=>{modelSelections[mode]=$('model').value;syncModelState()});
 $('projects').addEventListener('change',e=>{project=e.target.value;switchMode(mode).catch(err=>notify(err.message))});

@@ -130,7 +130,7 @@ def test_context_to_artifact_evidence_and_revision(client, monkeypatch, bridge):
     assert next_revision['revisions'][1]['sources'][0]['id'] == evidence['id']
     seen = []
     async def capture(model, instructions, messages, **kwargs):
-        assert kwargs['allow_tools'] is True
+        assert kwargs['tools']
         seen.append(instructions)
         return 'A careful paragraph ' + marker, {}
     monkeypatch.setattr(api, 'generate', capture)
