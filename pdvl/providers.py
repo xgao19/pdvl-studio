@@ -113,9 +113,12 @@ async def call_tool(name, arguments, project_id, tools, trace, emit):
     record = {'name': name, 'args': args, 'result_sha256': digest_tool_result(result)}
     if result.get('error'):
         record['error'] = result['error']
-    if name == 'read_research_artifact' and result.get('text'):
+    if result.get('search_artifact_id'):
+        record['search_artifact_id'] = result['search_artifact_id']
+    if name in ('read_research_artifact', 'open_web_page') and result.get('text'):
         record['source'] = {'artifact_id': result['id'], 'page': result['page'],
-                            'offset': result['offset'], 'length': len(result['text']), 'sha256': result['sha256']}
+                            'offset': result['offset'], 'length': len(result['text']), 'sha256': result['sha256'],
+                            'kind': result['kind'], 'title': result.get('title', result['name'])}
     trace.append(record)
     await emit({'type': 'tool_end', **record})
     return json.dumps(result, ensure_ascii=False)

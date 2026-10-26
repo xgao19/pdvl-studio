@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from markdown_it import MarkdownIt
 import bleach
-from .config import ROOT, model_settings, codex_runtime, codex_public
+from .config import ROOT, model_settings, codex_runtime, codex_public, ollama_web_key
 from .db import init_db, one, rows, execute, uid, utcnow, append_evidence, connection, add_run_event
 from .prompts import MODE_PROMPTS, DEFAULT_SCIENTIFIC_VOICE
 from .research import project_snapshot, research_context, citation_ids, validate_chat_citations
@@ -23,6 +23,7 @@ from .providers import pick_model, models_public, generate, ProviderError
 from .verification import check, TESTS
 from .tools import tools_for_mode
 from .papers import list_papers, search_arxiv, import_arxiv, archive_pdf, read_artifact, MAX_PDF_BYTES, search_library
+from .web_sources import web_records
 from . import __version__
 
 @asynccontextmanager
@@ -145,7 +146,7 @@ def health():
 def models():
     settings = model_settings()
     return {"models": models_public(), "defaults": {m: settings[m] for m in MODE_PROMPTS},
-            "codex": codex_public()}
+            "codex": codex_public(), "web": {"available": bool(ollama_web_key()), "provider": "Ollama"}}
 
 @app.get("/api/projects")
 def list_projects():
@@ -226,7 +227,13 @@ async def chat(pid: str, req: NewMessage):
                 state, error = 'failed', '聊天执行失败，请重试；已保留读取记录'
             finally:
                 answer = answer if state == 'completed' else ''.join(draft)
-                answer, checks = validate_chat_citations(pid, answer, previous_reads + [t['source'] for t in trace if t.get('source')])
+                reads = previous_reads + [t['source'] for t in trace if t.get('source')]
+                answer, checks = validate_chat_citations(pid, answer, reads)
+                web_reads = {r['artifact_id'] for r in reads if r.get('kind') == 'webpage'}
+                if (state == 'completed' and any(t['name'] in ('search_web', 'open_web_page') and not t.get('error') for t in trace)
+                        and not any(c['valid'] and c.get('artifact_id') in web_reads for c in checks)):
+                    checks.append({'target': 'web_sources', 'valid': False,
+                                   'reason': '已调用联网工具，但回答没有提供可核对的已读网页归档引用；搜索摘要不算原文支撑'})
                 meta.update(state=state, citations=checks)
                 if error:
                     meta['error'] = error
@@ -314,6 +321,13 @@ def add_evidence(pid: str, req: NewEvidence):
         raise HTTPException(404, str(error))
     except ValueError as error:
         raise HTTPException(422, str(error))
+
+
+@app.get('/api/projects/{pid}/web-sources')
+def web_sources(pid: str):
+    project_required(pid)
+    with connection() as con:
+        return web_records(con, pid)
 
 
 @app.get('/api/projects/{pid}/papers')
@@ -404,7 +418,7 @@ def run_verification(pid: str, cid: str, test_id: str):
 @app.get("/api/projects/{pid}/runs")
 def list_runs(pid: str):
     project_required(pid)
-    items = rows("SELECT * FROM runs WHERE project_id=? AND agent!='literature' ORDER BY rowid DESC", (pid,))
+    items = rows("SELECT * FROM runs WHERE project_id=? AND agent='codex-sdk' ORDER BY rowid DESC", (pid,))
     try:
         runtime = codex_runtime()
     except ValueError:

@@ -36,6 +36,7 @@ function renderMarkdown(target,body,meta={}){
 async function init(){
   try {
     const ms=await api('/models');models=ms.models;defaults=ms.defaults;fillCodex(ms.codex);
+    $('webStatus').textContent=ms.web.available?'联网搜索与正文阅读已就绪 · 复用 Ollama API 配置':'联网工具未配置：需要 https://ollama.com/v1 的 Ollama Cloud API key；现有归档仍可阅读。';
     const ps=await api('/projects');
     if(!ps.length){await post('/seed-csk',{});}
     await reloadProjects();
@@ -68,13 +69,13 @@ async function switchMode(next){
  if(activeProject!==project){
    activeProject=project;lastAnswer='';runViews.clear();$('runs').replaceChildren();$('docTitle').value='';$('docText').value='';$('documentSources').replaceChildren();
    $('documentSelect').replaceChildren();
-   paperSearchEpoch++;selectedPapers.clear();projectPapers=[];$('papers').replaceChildren();$('paperSearchResults').replaceChildren();$('paperSearchPanel').classList.add('hidden');$('paperStatus').textContent='';closeModal();
+   paperSearchEpoch++;selectedPapers.clear();projectPapers=[];$('papers').replaceChildren();$('webSources').replaceChildren();$('paperSearchResults').replaceChildren();$('paperSearchPanel').classList.add('hidden');$('paperStatus').textContent='';closeModal();
  }
  mode=next;
  document.querySelectorAll('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.mode===mode));
  $('modeCaption').textContent=modes[mode][0];$('modeTitle').innerHTML=modes[mode][1];$('question').placeholder=modes[mode][2];
  $('runPanel').classList.toggle('hidden',mode!=='investigate');$('manuscriptPanel').classList.toggle('hidden',mode!=='write');
- fillModels();await refreshMessages();await refreshEvidence();await refreshPapers();if(mode==='investigate')await refreshRuns();if(mode==='write')await refreshDocuments();
+ fillModels();await refreshMessages();await refreshEvidence();await refreshSources();if(mode==='investigate')await refreshRuns();if(mode==='write')await refreshDocuments();
 }
 async function refreshMessages(){
  if(!project)return;
@@ -84,13 +85,14 @@ async function refreshMessages(){
  for(const item of messages)appendMessage(item.role,item.content,item.model_id,JSON.parse(item.meta_json||'{}'));
  scrollToBottom();
 }
-const toolLabels={search_project_papers:'检索项目文献库',search_arxiv:'搜索 arXiv',import_arxiv_paper:'归档论文原文',read_research_artifact:'读取归档原文',find_research_claims:'查找研究主张',run_named_physics_check:'运行限定物理检查'};
+const toolLabels={search_web:'搜索网页',open_web_page:'打开并归档网页',search_project_papers:'检索项目文献库',search_arxiv:'搜索 arXiv',import_arxiv_paper:'归档论文原文',read_research_artifact:'读取归档原文',find_research_claims:'查找研究主张',run_named_physics_check:'运行限定物理检查'};
+const sourcePosition=(source,page=source.page)=>`${source.kind==='webpage'?'网页段':'原文页'} ${page}`;
 function appendMessageMeta(target,meta){
  if(meta.state&&meta.state!=='completed')target.appendChild(text(element('p','chat-state'),meta.state==='stopped'?'已停止 · 以下内容不完整':'执行失败 · 以下内容不完整'));
  if(meta.error)target.appendChild(text(element('p','citation-warning'),meta.error));
  if(meta.tools?.length){const details=element('details','source-reads');details.appendChild(text(element('summary'),'执行与原文读取记录'));
    for(const t of meta.tools){
-     if(t.source)details.appendChild(action(`${toolLabels[t.name]||t.name} · ${t.source.artifact_id} · p.${t.source.page} · offset ${t.source.offset}`,()=>viewArtifact(t.source.artifact_id,t.source.page,t.source.offset)));
+     if(t.source)details.appendChild(action(`${toolLabels[t.name]||t.name} · ${t.source.title||t.source.artifact_id} · ${sourcePosition(t.source)} · offset ${t.source.offset}`,()=>viewArtifact(t.source.artifact_id,t.source.page,t.source.offset)));
      else details.appendChild(text(element('p'),toolLabels[t.name]||t.name));
    }target.appendChild(details);
  }
@@ -131,7 +133,7 @@ async function send(){
    if(item.type==='progress'){chat.draft='';loading.content.firstElementChild.textContent='';chat.status.textContent=`第 ${item.round} 轮 · ${item.message}`}
    if(item.type==='delta'){chat.draft+=item.text;loading.content.firstElementChild.textContent=chat.draft;chat.status.textContent='正在生成回答 · 引用将在完成后校验'}
    if(item.type==='tool_start'||item.type==='tool_end'){
-     const args=item.args||{},detail=args.query||args.arxiv_id||(args.artifact_id?`${args.artifact_id} · p.${args.page||1} · offset ${args.offset||0}`:'');
+     const args=item.args||{},detail=args.query||args.url||args.arxiv_id||(args.artifact_id?`${args.artifact_id} · 页/段 ${args.page||1} · offset ${args.offset||0}`:'');
      progress.appendChild(text(element('p'),`${item.type==='tool_start'?'正在':'已完成'}${toolLabels[item.name]||item.name} ${detail}${item.error?' · '+item.error:''}`));
    }
    if(item.type==='done'){
@@ -150,7 +152,7 @@ async function send(){
      if(done){if(buffer.trim())event(JSON.parse(buffer));break}
    }
    if(!chat.done)throw new Error('连接中断，回答不完整；重新打开对话可查看服务端保存的记录');
-   if(activeChat===chat)await refreshPapers().catch(e=>notify(e.message));
+   if(activeChat===chat)await refreshSources().catch(e=>notify(e.message));
  }catch(e){
    if(activeChat===chat){chat.status.textContent=e.name==='AbortError'?'已停止 · 回答不完整':'连接失败 · 回答不完整';if(e.name!=='AbortError')notify(e.message)}
  }finally{if(activeChat===chat){activeChat=null;chatControls(false);scrollToBottom();$('question').focus()}}
@@ -177,13 +179,16 @@ async function viewArtifact(id,page=1,offset=0){
  const pid=project;
  const source=await api(`/projects/${pid}/artifacts/${encodeURIComponent(id)}/text?page=${page}&offset=${offset}`);
  if(pid!==project)return;
- openModal(source.title||'Archived source',`PDF page ${source.page} / ${source.page_count} · offset ${source.offset}\nSHA-256: ${source.sha256}\n${source.url||''}\n${source.notice||''}\n\n${source.text}${source.truncated?'\n\n[本页未读完，点击“继续本页”]':''}`);
+ openModal(source.title||'Archived source',`${sourcePosition(source)} / ${source.page_count} · offset ${source.offset}\nSHA-256: ${source.sha256}\n${source.url||''}\n${source.retrieved_at?'归档时间：'+source.retrieved_at+'\n':''}${source.notice||''}\n\n${source.text}${source.truncated?'\n\n[当前页或段未读完，请继续读取]':''}`);
  sourceView={id,pid,...source};$('sourcePage').value=page;$('sourcePage').max=source.page_count;
  $('nextSourceChunk').disabled=source.next_offset===null;
- $('sourcePDF').classList.toggle('hidden',!source.pdf_artifact_id);$('sourcePDF').href='/api/artifacts/'+encodeURIComponent(source.pdf_artifact_id||'');
+ const original=source.kind==='webpage'?source.raw_artifact_id:source.pdf_artifact_id;
+ $('sourceOriginal').classList.toggle('hidden',!original);$('sourceOriginal').href='/api/artifacts/'+encodeURIComponent(original||'');
+ $('sourceOriginal').textContent=source.kind==='webpage'?'下载网页抓取响应':'下载原始 PDF';
+ $('sourceURL').classList.toggle('hidden',!source.url);$('sourceURL').href=source.url||'';
  $('sourceControls').classList.remove('hidden');
 }
-function evidencePage(e){return JSON.parse(e.provenance||'{}').paper_source?.pages?.[0]||1}
+function evidencePage(e){const p=JSON.parse(e.provenance||'{}');return (p.web_source||p.paper_source)?.pages?.[0]||1}
 function evidenceCard(e){
  const card=element('div','evidence-entry');
  card.appendChild(text(element('p'),`${e.verdict} · ${e.description}`));
@@ -211,10 +216,10 @@ async function verify(c){
  catch(e){notify(e.message)}
 }
 async function saveClaim(){const statement=$('claimStatement').value.trim(),title=$('claimTitle').value.trim()||'New hypothesis';if(!statement)return notify('Enter a physical proposition first');
- try{await post(`/projects/${project}/claims`,{title,statement,kind:'general'});$('claimStatement').value='';$('claimTitle').value='';await refreshEvidence();await refreshPapers()}catch(e){notify(e.message)}
+ try{await post(`/projects/${project}/claims`,{title,statement,kind:'general'});$('claimStatement').value='';$('claimTitle').value='';await refreshEvidence();await refreshSources()}catch(e){notify(e.message)}
 }
 async function saveFromComposer(){const statement=$('question').value.trim();if(!statement)return notify('Write a hypothesis in the composer first');
- try{await post(`/projects/${project}/claims`,{title:statement.slice(0,70),statement});notify('Saved as an unverified research idea');await refreshEvidence();await refreshPapers()}catch(e){notify(e.message)}
+ try{await post(`/projects/${project}/claims`,{title:statement.slice(0,70),statement});notify('Saved as an unverified research idea');await refreshEvidence();await refreshSources()}catch(e){notify(e.message)}
 }
 function createRunView(r,pid){
  const box=element('div','run-entry');box.id='run-'+r.id;
@@ -249,7 +254,7 @@ function renderRunArtifacts(view,artifacts,pid){
  }
  if(artifacts.length&&projectClaims.length)view.archives.appendChild(evidenceForm(artifacts,pid));
 }
-function evidenceForm(artifacts,pid,paper=null){
+function evidenceForm(artifacts,pid,archivedSource=null){
    const form=element('div');
    const source=element('select'),claim=element('select'),kind=element('select'),verdict=element('select'),description=element('textarea');
    kind.setAttribute('aria-label','Evidence kind');source.setAttribute('aria-label','Source artifact');claim.setAttribute('aria-label','Claim');verdict.setAttribute('aria-label','Evidence verdict');
@@ -257,14 +262,14 @@ function evidenceForm(artifacts,pid,paper=null){
    source.value=(artifacts.find(a=>a.name==='workspace/findings.md')||artifacts[0]).id;
    for(const c of projectClaims){const option=text(element('option'),c.title);option.value=c.id;claim.appendChild(option)}
    for(const value of ['literature','derivation','numerical','note']){const option=text(element('option'),value);option.value=value;kind.appendChild(option)}
-   kind.value=paper?'literature':'derivation';
+   kind.value=archivedSource?'literature':'derivation';
    for(const value of ['unresolved','supporting','challenging']){const option=text(element('option'),value);option.value=value;verdict.appendChild(option)}
    description.placeholder='Explain how this source bears on the selected claim';
-   const page=element('input');page.type='number';page.min=1;page.max=paper?.page_count||1;page.value=1;page.setAttribute('aria-label','Source page');
-   if(paper){form.append(text(element('span'),'来源页码：'),page)}
+   const page=element('input');page.type='number';page.min=1;page.max=archivedSource?.page_count||1;page.value=1;page.setAttribute('aria-label','Source page');
+   if(archivedSource){form.append(text(element('span'),archivedSource.kind==='webpage'?'网页段号：':'来源页码：'),page)}
    form.append(source,claim,kind,verdict,description,action('Record as evidence',async()=>{
      if(!description.value.trim())throw new Error('Describe the evidence before recording it');
-     await post(`/projects/${pid}/evidence`,{claim_id:claim.value,artifact_id:source.value,kind:kind.value,verdict:verdict.value,description:description.value.trim(),provenance:paper?{pages:[Number(page.value)]}:{}});
+     await post(`/projects/${pid}/evidence`,{claim_id:claim.value,artifact_id:source.value,kind:kind.value,verdict:verdict.value,description:description.value.trim(),provenance:archivedSource?{pages:[Number(page.value)]}:{}});
      description.value='';await refreshEvidence();notify('Evidence recorded; claim status unchanged');
    }));
    return form;
@@ -351,8 +356,8 @@ function updatePaperSelection(){
  $('readSelectedPapers').disabled=!selectedPapers.size;
  $('readSelectedPapers').textContent=selectedPapers.size===2?'对照这两篇':'精读这篇';
 }
-async function refreshPapers(){
- const pid=project,papers=await api(`/projects/${pid}/papers`);if(pid!==project)return;
+async function refreshSources(){
+ const pid=project,[papers,webSources]=await Promise.all([api(`/projects/${pid}/papers`),api(`/projects/${pid}/web-sources`)]);if(pid!==project)return;
  projectPapers=papers;
  for(const id of selectedPapers)if(!papers.some(p=>p.id===id))selectedPapers.delete(id);
  $('papers').replaceChildren();paperChecks.clear();
@@ -368,11 +373,19 @@ async function refreshPapers(){
    $('papers').appendChild(card);
  }
  updatePaperSelection();
+ $('webSources').replaceChildren();
+ for(const source of webSources){
+   const card=element('div','paper-card');card.append(text(element('strong'),source.title),
+     text(element('p'),source.url),text(element('p'),`归档 ${source.retrieved_at} · ${source.page_count} 段 · ${source.id}`),
+     action('阅读网页快照',()=>viewArtifact(source.id)));
+   if(projectClaims.length){const details=element('details');details.append(text(element('summary'),'登记为来源证据'),evidenceForm([{id:source.id,name:source.title}],pid,source));card.appendChild(details)}
+   $('webSources').appendChild(card);
+ }
 }
 async function importPaper(value){
  const pid=project;$('paperStatus').textContent='正在获取原始 PDF 并归档分页文本…';
  try{const paper=await post(`/projects/${pid}/papers`,{arxiv_id:value});if(pid!==project)return;
-   if(selectedPapers.size<2)selectedPapers.add(paper.id);await refreshPapers();$('paperSearchPanel').open=false;$('paperStatus').textContent='原文已归档，可选择精读或对照。';
+   if(selectedPapers.size<2)selectedPapers.add(paper.id);await refreshSources();$('paperSearchPanel').open=false;$('paperStatus').textContent='原文已归档，可选择精读或对照。';
  }catch(e){if(pid===project)$('paperStatus').textContent=e.message}
 }
 $('openLiterature').onclick=async()=>{try{if(mode!=='discuss')await switchMode('discuss');$('literaturePanel').open=true;$('paperQuery').focus()}catch(e){notify(e.message)}};
@@ -396,7 +409,7 @@ $('paperPDF').onchange=async()=>{
  $('paperStatus').textContent='正在提取 PDF 分页文本…';
  try{if(file.size>8*1024*1024)throw new Error('PDF 最大为 8 MiB');
    const paper=await api(`/projects/${pid}/papers/pdf?title=${encodeURIComponent(file.name.slice(0,200))}`,{method:'POST',headers:{'Content-Type':'application/pdf'},body:await file.arrayBuffer()});
-   if(pid!==project)return;if(selectedPapers.size<2)selectedPapers.add(paper.id);await refreshPapers();$('paperStatus').textContent='PDF 原件与分页文本已归档。';
+   if(pid!==project)return;if(selectedPapers.size<2)selectedPapers.add(paper.id);await refreshSources();$('paperStatus').textContent='PDF 原件与分页文本已归档。';
  }catch(e){if(pid===project)$('paperStatus').textContent=e.message}finally{$('paperPDF').value=''}
 };
 $('readSelectedPapers').onclick=()=>{
@@ -410,7 +423,7 @@ $('findSourceText').onclick=async()=>{
  const q=$('sourceQuery').value.trim(),view=sourceView;if(!q||!view)return;
  try{const data=await api(`/projects/${view.pid}/artifacts/${view.id}/text?query=${encodeURIComponent(q)}`);
    if(view!==sourceView||view.pid!==project)return;
-   $('modalText').textContent=(data.matches||[]).map(m=>`PDF page ${m.page} · offset ${m.offset}\n${m.excerpt}`).join('\n\n')||'未找到匹配的抽取文本；这不证明原文不存在相关内容。';
+   $('modalText').textContent=(data.matches||[]).map(m=>`${sourcePosition(data,m.page)} · offset ${m.offset}\n${m.excerpt}`).join('\n\n')||'未找到匹配的抽取文本；这不证明原文不存在相关内容。';
  }catch(e){notify(e.message)}
 };
 $('timeline').addEventListener('click',event=>{

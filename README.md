@@ -6,7 +6,7 @@ One GitHub repository, one local web workspace, and independent research state. 
 
 ### At a glance
 
-- **Discuss:** streamed theoretical-physics dialogue, live tool progress and stop control; arXiv search, project-wide full-text retrieval and archived-paper reading with source-access checks.
+- **Discuss:** streamed theoretical-physics dialogue, live tool progress and stop control; public web search and archived webpage reading, arXiv search and project-paper full-text retrieval with source-access checks.
 - **Investigate:** deep reasoning chat plus optional sandboxed Codex SDK task runs.
 - **Verify:** narrow executable QFT checks and immutable evidence records; explicitly distinguishes a formal identity from physical observability.
 - **Write:** separate scientific-writing prompt, manuscript notebook and revision history and editable per-project **Scientific Voice**; prose does not simply rewrite Codex logs.
@@ -67,7 +67,17 @@ The implementation adds one artifact table and reuses the existing revision refe
 3. Inspect **执行与原文读取记录** or click a checked page citation. Read by PDF page number, search keywords across the document, or continue a long page. Download the archived PDF to inspect equations and figures.
 4. Save a claim, expand **登记为文献证据** on its source paper, specify the page and interpretation, then record evidence. In Write, cite that evidence and save a revision through the existing workflow.
 
-Search results contain abstracts; importing preserves original PDF bytes and separately extracted page text with SHA-256 hashes. The reader reports partial scope and does not automatically verify claims. PDFs are limited to 8 MiB / 150 pages; scanned or encrypted files require preparation before import. No OCR, image interpretation or arbitrary publisher-URL fetching is implemented. The previously published Intel preview is unchanged; these features are currently validated from source.
+Search results contain abstracts; importing preserves original PDF bytes and separately extracted page text with SHA-256 hashes. The reader reports partial scope and does not automatically verify claims. PDFs are limited to 8 MiB / 150 pages; scanned or encrypted files require preparation before import. No OCR or image interpretation is implemented. Publisher webpages can be read through the web workflow below; this does not import their PDF originals. The previously published Intel preview is unchanged; these features are currently validated from source.
+
+### Search and read the public web
+
+With a configured Ollama Cloud model at `https://ollama.com/v1`, Discuss reuses that provider's existing API key for Ollama's [web search and fetch APIs](https://docs.ollama.com/capabilities/web-search). No additional search service, SDK, key variable or model switch is needed. Other chat providers can still answer from archived sources; the web tools are advertised only when an Ollama Cloud credential is configured. Service authorization and quota errors are reported explicitly.
+
+Ask a question requiring online sources, for example: “查阅 Ollama 官方联网搜索说明和 SQLite FTS5 官方文档，解释网页搜索与本地全文检索的区别。打开两个来源，阅读相关正文，并给出归档引用。” You can also paste a public webpage URL. The existing tool loop searches, opens relevant sources, archives the search/service responses and extracted text, reads needed sections and streams an answer with archive links. Search excerpts alone do not count as original reading; an answer that uses web tools without a checked webpage citation is flagged.
+
+Expand **联网资料 · 搜索、阅读与归档** to reopen snapshots. Citations open the same source reader, showing URL, retrieval time, hash and section count. Web `§N` anchors refer to stored 7,000-character text segments, not website pagination. Search within a snapshot, read other sections, download the exact archived fetch response, or visit the original website. For follow-ups, ask about the sources already read: the model receives their IDs and can reread the immutable snapshots without fetching them again. Ask explicitly for fresh sources when timeliness matters. Reopening an unchanged URL/response reuses its snapshot; changed responses get new snapshots and leave earlier citations intact.
+
+These are **Ollama-extracted webpage bodies, not raw HTML or guaranteed full-page copies**. The remote service fetches URLs; PDVL does not run website scripts, interpret images, bypass paywalls or provide OCR. Local/private addresses, credential-bearing URLs and custom ports are rejected; service responses are bounded to 2 MiB. Failure or cancellation does not archive a partial fetch. Completed snapshots survive stopping the chat. Treat webpage text as untrusted data. Source-access checks establish which snapshot/section was read, not whether a statement is true or entailed. To use a source in a manuscript, save a claim and explicitly register the relevant webpage section as evidence, then cite that evidence in Write.
 
 ### Stream, stop and search the project library
 
@@ -94,9 +104,11 @@ Literature validation on 2026-10-26 used the same Ollama model to search arXiv a
 
 Streaming/retrieval validation on 2026-10-26: **74 Python tests and 9 Node UI tests passed**. The same Ollama configuration performed project-wide keyword retrieval, original-page reads and checked citations. One bounded live follow-up produced 118 text delta events (first text at 2.605 seconds, completion at 2.914 seconds); this is a single smoke measurement, not a latency benchmark. Browser checks verified server-side stop, incomplete-state restoration, and successful follow-up after stopping. Source/evidence records survived service restarts without creating new evidence or promoting claims. Synthetic corpus tests validate retrieval/provenance mechanics; real-paper scientific accuracy, formula interpretation and completeness still require expert review. No package or Release was published.
 
+Web validation on 2026-10-26: **107 Python tests and 11 Node UI tests passed**. The existing Ollama model automatically issued two searches, opened the Ollama and SQLite official documentation, read relevant archived sections and returned four checked source targets. A follow-up only reread stored snapshots, made no search/fetch calls and returned five checked targets. Browser checks opened the two-source inventory and the shared webpage reader with URL, timestamp, section navigation and response download. Mocked integration additionally checks cancellation, malformed/oversized responses, provider credential isolation, cross-project access, immutable version/deduplication behavior, evidence and manuscript references after restart. These establish source-access mechanics, not semantic correctness, search coverage or extraction fidelity. No dependency, package or Release was added.
+
 ### Evaluate Discuss with real papers
 
-The [20-question source-pinned suite](evals/discuss_real_papers.json) uses three public CS-kernel papers and separate rubrics for source support and key limitations. The [2026-10-26 baseline](docs/evals/discuss-baseline-2026-10-26.md) records 20 completed Ollama trials: raw-question retrieval hit@8 was 14/20; labeled-page reading coverage was 88%; source audit marked 13 answers supported and 7 needing work. All mentioned the requested limitations, but most questions explicitly asked about them. These are single-run diagnostics with an agent source audit, not independent expert certification or a general physics accuracy score. The suite now has 82 Python tests and 9 Node UI tests, including evaluator integrity and isolation checks.
+The [20-question source-pinned suite](evals/discuss_real_papers.json) uses three public CS-kernel papers and separate rubrics for source support and key limitations. The [2026-10-26 baseline](docs/evals/discuss-baseline-2026-10-26.md) records 20 completed Ollama trials: raw-question retrieval hit@8 was 14/20; labeled-page reading coverage was 88%; source audit marked 13 answers supported and 7 needing work. All mentioned the requested limitations, but most questions explicitly asked about them. These are single-run diagnostics with an agent source audit, not independent expert certification or a general physics accuracy score. At that baseline commit, the suite had 82 Python tests and 9 Node UI tests, including evaluator integrity and isolation checks.
 
 ```bash
 python scripts/evaluate_discuss.py           # dry run: no downloads or model calls
@@ -114,7 +126,7 @@ Edit that run's `reviews.json` to record source-audit verdicts and explanations,
 python scripts/evaluate_discuss.py --report .local/evals/discuss_<timestamp>_<id>
 ```
 
-Unreviewed answers remain unreviewed, even when retrieval and citation access pass. Judgments must cover extra claims, not just the requested core fact; source access and literal anchor exposure never substitute for semantic review. Recorded timeouts/API failures remain failed trials. The evaluator replaces the previous three-question qualitative model canary; no parallel model-scoring workflow or new runtime dependency was added. The existing application behavior and released Intel preview are unchanged.
+Unreviewed answers remain unreviewed, even when retrieval and citation access pass. Judgments must cover extra claims, not just the requested core fact; source access and literal anchor exposure never substitute for semantic review. Recorded timeouts/API failures remain failed trials. The evaluator replaces the previous three-question qualitative model canary; no parallel model-scoring workflow or new runtime dependency was added. The evaluator adds no application-side scoring path. The released Intel preview is unchanged.
 
 ### Source layout
 
@@ -141,7 +153,7 @@ Or create an empty GitHub repository manually and `git push`. The system runs in
 
 ### Important scope boundaries
 
-This is a **working integrated foundation**: arXiv/PDF text ingestion and page citations are implemented in the source development version. OCR, equation/figure reconstruction, arbitrary publisher access, remote auth, HPC scheduling, multi-user access and production cost accounting remain unimplemented. Live checks cover specific local models and bounded tasks. Do not expose this unauthenticated local app on a public interface.
+This is a **working integrated foundation**: public web search, extracted webpage snapshots, arXiv/PDF text ingestion and source citations are implemented in the source development version. OCR, equation/figure reconstruction, authenticated publisher access, remote auth, HPC scheduling, multi-user access and production cost accounting remain unimplemented. Live checks cover specific local models and bounded tasks. Do not expose this unauthenticated local app on a public interface.
 
 See [Architecture](docs/ARCHITECTURE.md), [Provider details](docs/PROVIDERS.md) and [Research protocol](docs/RESEARCH_PROTOCOL.md).
 

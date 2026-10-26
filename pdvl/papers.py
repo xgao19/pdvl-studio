@@ -196,14 +196,21 @@ def read_artifact(pid: str, aid: str, page: int = 1, offset: int = 0, query: str
         content = bytes(artifact.pop('content')).decode('utf-8')
     except UnicodeDecodeError as exc:
         raise ValueError('Binary artifact; download the original file instead') from exc
-    paper = json.loads(content) if artifact.pop('agent') == 'literature' and artifact['name'] == 'paper.json' else None
-    pages = paper['pages'] if paper else [content]
+    agent = artifact.pop('agent')
+    if agent == 'web' and artifact['name'] != 'webpage.json':
+        raise ValueError('Web service/search snapshots are downloadable provenance, not webpage reading; open the source URL')
+    document = json.loads(content) if (agent, artifact['name']) in (
+        ('literature', 'paper.json'), ('web', 'webpage.json')) else None
+    pages = document['pages'] if document else [content]
     if page > len(pages):
         raise ValueError('Page outside the archived document')
-    source = {**artifact, 'page_count': len(pages)}
-    if paper:
-        source.update({key: paper.get(key) for key in ('title', 'url', 'arxiv_id', 'pdf_artifact_id', 'pdf_sha256')})
+    source = {**artifact, 'page_count': len(pages), 'kind': 'artifact'}
+    if agent == 'literature' and document:
+        source.update({key: document.get(key) for key in ('title', 'url', 'arxiv_id', 'pdf_artifact_id', 'pdf_sha256')})
+        source['kind'] = 'paper'
         source['notice'] = 'Extracted PDF text only; equations/figures may need checking in the original PDF. Page numbers are PDF page positions.'
+    elif agent == 'web' and document:
+        source.update({key: document[key] for key in ('kind', 'title', 'url', 'retrieved_at', 'raw_artifact_id', 'response_sha256', 'notice')})
     if query:
         matches = []
         for number, body in enumerate(pages, 1):
@@ -213,11 +220,12 @@ def read_artifact(pid: str, aid: str, page: int = 1, offset: int = 0, query: str
                                 'excerpt': body[max(0, start - 200):start + 500]})
         return {**source, 'matches': matches[:8], 'truncated': len(matches) > 8}
     body = pages[page - 1]
-    if paper and not body:
+    if document and not body:
         source['notice'] += ' This page has no extractable text; inspect the original PDF.'
     if offset > len(body):
         raise ValueError('Offset outside the archived text')
     end = offset + 7000  # Keep serialized tool results intact within the model context budget.
+    label = f'网页 §{page}' if source['kind'] == 'webpage' else f'原文 p.{page}'
     return {**source, 'page': page, 'offset': offset, 'text': body[offset:end],
             'truncated': len(body) > end, 'next_offset': end if len(body) > end else None,
-            'citation': f'[原文 p.{page}](/api/artifacts/{aid}#page={page})'}
+            'citation': f'[{label}](/api/artifacts/{aid}#page={page})'}

@@ -1,4 +1,4 @@
-"""Provider-neutral research tools; only literature imports write source archives."""
+"""Provider-neutral research tools; literature and web tools write source archives."""
 from __future__ import annotations
 import hashlib
 import json
@@ -7,14 +7,24 @@ import httpx
 from .db import rows
 from .verification import check, TESTS
 from .papers import read_artifact, search_arxiv, import_arxiv, search_library
+from .config import ollama_web_key
+from .web_sources import search_web, open_web_page
 
 TOOL_DEFS = [
+    {"type":"function", "name":"search_web",
+     "description":"Search the public web using Ollama. Returns untrusted title/URL/snippet leads and archives the search response. Snippets are not original reading: open multiple relevant sources before attributing findings. Prefer primary sources. For follow-ups reuse archived sources with read_research_artifact.",
+     "parameters":{"type":"object","properties":{"query":{"type":"string","minLength":2,"maxLength":300}},
+                   "required":["query"],"additionalProperties":False}},
+    {"type":"function", "name":"open_web_page",
+     "description":"Fetch a public HTTP(S) webpage through Ollama, archive the extracted body and service response, then read section 1. Returns exact archive citation, source URL, retrieval date, hash and section count. Read other sections with read_research_artifact; sections are text segments, not PDF pages. Does not execute scripts, guarantee complete extraction, or verify claims. Follow-up questions should reread existing artifact IDs unless fresh web information is needed.",
+     "parameters":{"type":"object","properties":{"url":{"type":"string","maxLength":2048}},
+                   "required":["url"],"additionalProperties":False}},
     {"type":"function", "name":"search_project_papers",
      "description":"Rank keyword matches across all archived papers in this project. Search useful English terminology for English papers. Returns page excerpts, not full-paper reading. Read the relevant original pages before citing; no matches are not negative scientific evidence.",
      "parameters":{"type":"object","properties":{"query":{"type":"string","minLength":1,"maxLength":150}},
                    "required":["query"],"additionalProperties":False}},
     {"type":"function", "name":"read_research_artifact",
-     "description":"Read archived original text, including its hash and exact source citation. For papers use PDF page numbers; query finds matching pages, then read those pages. Follow next_offset to read a long page completely. Text extraction may lose equations/figures; never claim unread pages were reviewed. Binary artifacts are downloadable only.",
+     "description":"Read archived original text, including its hash and exact source citation. For papers use PDF page numbers; for webpages page selects a stored section. query is ONE literal case-insensitive substring, e.g. snippet, not a semantic or multi-keyword query; it finds excerpts, then read the matching pages/sections. Follow next_offset to read a long page completely. Extraction may lose content; never claim unread material was reviewed. Search snippets and binary artifacts are downloadable provenance only.",
      "parameters":{"type":"object","properties":{"artifact_id":{"type":"string"},
                    "page":{"type":"integer","minimum":1},"offset":{"type":"integer","minimum":0},
                    "query":{"type":"string","maxLength":150}},
@@ -39,11 +49,22 @@ TOOL_DEFS = [
 
 
 def tools_for_mode(mode: str) -> list[dict]:
-    return [tool for tool in TOOL_DEFS if mode != 'discuss' or tool['name'] != 'run_named_physics_check']
+    web_available = bool(ollama_web_key())
+    return [tool for tool in TOOL_DEFS
+            if (mode != 'discuss' or tool['name'] != 'run_named_physics_check')
+            and (web_available or tool['name'] not in ('search_web', 'open_web_page'))]
 
 async def execute_research_tool(name: str, args: dict, project_id: str) -> dict:
     if not isinstance(args, dict):
         return {'error': 'Tool arguments must be an object'}
+    if name in ('search_web', 'open_web_page'):
+        try:
+            return await (search_web(project_id, args.get('query', '')) if name == 'search_web'
+                          else open_web_page(project_id, args.get('url', '')))
+        except httpx.HTTPError as exc:
+            return {'error': f'Web access failed: {type(exc).__name__}; no webpage was read. This is not a negative finding.'}
+        except (ValueError, LookupError) as exc:
+            return {'error': str(exc)}
     if name == 'search_project_papers':
         try:
             return search_library(project_id, args.get('query', ''))

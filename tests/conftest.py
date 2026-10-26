@@ -56,10 +56,13 @@ def model_stream(monkeypatch):
     from copy import deepcopy
     import httpx
     from pdvl import providers
-    def install(replies):
+    def install(replies, web=None):
         replies = iter(replies)
         sent = []
         def handle(request):
+            if request.url.host == 'ollama.com' and request.url.path.startswith('/api/'):
+                assert web is not None, 'Unexpected web service request'
+                return web(request)
             payload = json.loads(request.content)
             sent.append((str(request.url), deepcopy(payload)))
             reply = next(replies)

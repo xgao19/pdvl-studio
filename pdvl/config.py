@@ -34,6 +34,13 @@ def provider_base(model: dict) -> str:
             else PROVIDER_ENV[model["provider"]][1]) or ""
 
 
+def ollama_web_key() -> str | None:
+    """Reuse a configured Ollama Cloud credential; never send another provider's key."""
+    return next((provider_key(model) for model in model_settings()['models']
+                 if provider_base(model).rstrip('/') == 'https://ollama.com/v1'
+                 and provider_key(model)), None)
+
+
 def codex_runtime() -> dict:
     """Only PDVL's private runtime config; never read the user's Codex login/config."""
     directory = (home() / 'codex').resolve()

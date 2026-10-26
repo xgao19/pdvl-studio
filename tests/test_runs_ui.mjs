@@ -29,7 +29,7 @@ function setup(){
  }
  const document={hidden:false,getElementById:id=>nodes.get(id),createElement:tag=>new Element(tag),
    querySelectorAll:()=>[],querySelector:()=>new Element(),addEventListener(){}};
- const data={runs:[],events:new Map(),pending:null,papers:[],source:null,chat:{answer:'Scoped comparison',meta:{}}};
+ const data={runs:[],events:new Map(),pending:null,papers:[],webSources:[],source:null,chat:{answer:'Scoped comparison',meta:{}}};
  async function fetch(url,options={}){
    calls.push({url,options});
    if(url==='/api/models')return new Promise(()=>{}); // Bootstrap is outside this focused UI test.
@@ -37,6 +37,7 @@ function setup(){
    let value=[];
    if(url==='/api/projects/p/runs')value=data.runs;
    else if(url==='/api/projects/p/papers')value=data.papers;
+   else if(url==='/api/projects/p/web-sources')value=data.webSources;
    else if(url.match(/\/projects\/[^/]+\/chat$/)){
      const events=data.chatEvents||[{type:'start',id:'m_live'},{type:'done',...data.chat}];
      const bytes=new TextEncoder().encode(events.map(e=>JSON.stringify(e)+'\n').join(''));
@@ -119,7 +120,7 @@ test('Codex uses only the configured model and hides continuation from another r
 test('literature selection limits comparison to two papers and sends their actual archive IDs',async()=>{
  const app=setup();
  app.data.papers=[1,2,3].map(n=>({id:'a_'+n,title:'Study '+n,page_count:3,arxiv_id:'2301.1234'+n}));
- await app.run('refreshPapers()');
+ await app.run('refreshSources()');
  for(const id of ['a_1','a_2','a_3'])app.run(`paperChecks.get('${id}').checked=true;paperChecks.get('${id}').onchange();`);
  assert.deepEqual([...app.run('selectedPapers')],['a_1','a_2']);
  assert.equal(app.run("paperChecks.get('a_3').checked"),false);
@@ -144,6 +145,37 @@ test('source viewer uses page and offset reading and follows saved evidence page
  assert.match(app.calls.at(-1).url,/page=2&offset=7000/);
  assert.equal(app.run("evidencePage({provenance:JSON.stringify({paper_source:{pages:[3]}})})"),3);
  assert.equal(app.run("evidencePage({provenance:'{}'})"),1);
+});
+
+test('web snapshots use the shared reader and evidence form with section provenance',async()=>{
+ const app=setup();
+ app.data.webSources=[{id:'a_web',kind:'webpage',title:'Primary source',url:'https://example.com/',retrieved_at:'2026-10-26T00:00:00Z',page_count:3}];
+ app.run("projectClaims=[{id:'c_1',title:'Scoped claim'}]");
+ await app.run('refreshSources()');
+ const card=app.document.getElementById('webSources').children[0];
+ assert.equal(card.children[0].textContent,'Primary source');
+ const form=card.children.at(-1).children[1],page=form.children[1];
+ page.value=2;form.children.at(-2).value='A limitation from the original section';
+ await form.children.at(-1).onclick();
+ const saved=JSON.parse(app.calls.find(c=>c.url.endsWith('/evidence')&&c.options.method==='POST').options.body);
+ assert.equal(saved.artifact_id,'a_web');assert.deepEqual(saved.provenance,{pages:[2]});
+ assert.equal(app.run("evidencePage({provenance:JSON.stringify({web_source:{pages:[2]}})})"),2);
+ app.data.source={...app.data.webSources[0],page:2,offset:0,next_offset:null,text:'Original extracted body',
+                  sha256:'snapshot-hash',raw_artifact_id:'a_response',notice:'Extracted webpage text, not HTML.'};
+ await app.run("viewArtifact('a_web',2)");
+ assert.match(app.document.getElementById('modalText').textContent,/网页段 2/);
+ assert.match(app.document.getElementById('modalText').textContent,/归档时间/);
+ assert.equal(app.document.getElementById('sourceOriginal').href,'/api/artifacts/a_response');
+ assert.equal(app.document.getElementById('sourceURL').href,'https://example.com/');
+});
+
+test('web source refresh cannot populate another project after an in-flight response',async()=>{
+ const app=setup();
+ let finish;const response=new Promise(r=>{finish=r});
+ app.context.fetch=()=>response;
+ const current=app.run('refreshSources()');app.run("project='other'");
+ finish({ok:true,json:async()=>[{id:'stale',title:'Stale'}]});await current;
+ assert.equal(app.document.getElementById('webSources').children.length,0);
 });
 
 const tick=()=>new Promise(resolve=>setImmediate(resolve));

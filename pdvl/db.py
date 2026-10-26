@@ -163,14 +163,17 @@ def append_evidence(project_id: str, claim_id: str, kind: str, verdict: str,
             provenance = {**(provenance or {}), 'artifact': {
                 key: artifact[key] for key in ('id', 'run_id', 'name', 'sha256', 'model_id')},
                 'context_sha256': hashlib.sha256(artifact['context_json'].encode()).hexdigest()}
-            if artifact['agent'] == 'literature' and artifact['name'] == 'paper.json':
-                paper = json.loads(artifact['content'])
+            if (artifact['agent'], artifact['name']) in (('literature', 'paper.json'), ('web', 'webpage.json')):
+                source = json.loads(artifact['content'])
                 pages = provenance.pop('pages', [])
-                if not isinstance(pages, list) or any(type(p) is not int or not 1 <= p <= len(paper['pages']) for p in pages):
-                    raise ValueError('Evidence pages must be PDF page numbers from this paper')
-                provenance['paper_source'] = {key: paper.get(key) for key in
-                                              ('title', 'url', 'arxiv_id', 'pdf_artifact_id', 'pdf_sha256')}
-                provenance['paper_source']['pages'] = sorted(set(pages))
+                if not isinstance(pages, list) or any(type(p) is not int or not 1 <= p <= len(source['pages']) for p in pages):
+                    raise ValueError('Evidence pages/sections must exist in the archived source')
+                web = artifact['agent'] == 'web'
+                key = 'web_source' if web else 'paper_source'
+                fields = (('title', 'url', 'retrieved_at', 'raw_artifact_id', 'response_sha256') if web else
+                          ('title', 'url', 'arxiv_id', 'pdf_artifact_id', 'pdf_sha256'))
+                provenance[key] = {field: source.get(field) for field in fields}
+                provenance[key]['pages'] = sorted(set(pages))
         con.execute("INSERT INTO evidence(id,project_id,claim_id,kind,verdict,description,provenance,created_at,artifact_id) "
                     "VALUES (?,?,?,?,?,?,?,?,?)",
                     (eid, project_id, claim_id, kind, verdict, description,
