@@ -1,6 +1,7 @@
 """Real subprocess tests for progress, cancellation, and immutable continuations."""
 import concurrent.futures
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -44,7 +45,7 @@ print(json.dumps({'kind':'final','text':'Finished','thread_id':'thread-live'}),f
 def queue(client, monkeypatch):
     monkeypatch.setenv('PDVL_CODEX_ENABLED', '1')
     pid = client.post('/api/projects', json={'title': 'Task controls'}).json()['id']
-    run = client.post(f'/api/projects/{pid}/runs', json={'question': 'A small test', 'model_id': 'test-model'})
+    run = client.post(f'/api/projects/{pid}/runs', json={'question': 'A small test'})
     assert run.status_code == 202
     return pid, run.json()['id']
 
@@ -221,3 +222,105 @@ def test_cancel_escalates_when_agent_ignores_sigterm(client, monkeypatch, bridge
         wait_for(lambda: client.get('/api/runs/' + rid).json()['thread_id'])
         client.post(f'/api/runs/{rid}/cancel')
         assert future.result(timeout=6)['state'] == 'cancelled'
+
+
+def test_runtime_is_frozen_and_parent_app_credentials_are_not_inherited(client, monkeypatch, bridge):
+    monkeypatch.setenv('CODEX_HOME', '/unrelated/app-home')
+    monkeypatch.setenv('CODEX_SQLITE_HOME', '/unrelated/app-sqlite')
+    monkeypatch.setenv('CODEX_API_KEY', 'unrelated-app-key')
+    monkeypatch.setenv('CODEX_ACCESS_TOKEN', 'unrelated-app-token')
+    monkeypatch.setenv('OPENAI_API_KEY', 'unrelated-openai-key')
+    monkeypatch.setenv('OPENAI_BASE_URL', 'https://unrelated.example/v1')
+    monkeypatch.setenv('CUSTOM_API_KEY', 'unselected-provider-key')
+    _, rid = queue(client, monkeypatch)
+    bridge['script'] = '''
+import json, os, sys
+from pathlib import Path
+task=json.load(sys.stdin)
+runtime=task['runtime']
+assert os.environ['CODEX_HOME']==os.environ['CODEX_SQLITE_HOME']==runtime['home']
+assert os.environ['PDVL_TEST_TOKEN']=='fake-runtime-token'
+assert all(key not in os.environ for key in ('OPENAI_API_KEY','OPENAI_BASE_URL','CODEX_API_KEY','CODEX_ACCESS_TOKEN','CUSTOM_API_KEY'))
+assert runtime['provider']=='test' and runtime['base_url']=='http://localhost:9999/v1'
+assert 'fake-runtime-token' not in json.dumps(task)
+print(json.dumps({'kind':'final','text':'Isolated provider verified'}),flush=True)
+'''
+    result = worker.process_one()
+    assert result['state'] == 'completed'
+    assert os.environ['CODEX_HOME'] == '/unrelated/app-home'
+    assert os.environ['CODEX_SQLITE_HOME'] == '/unrelated/app-sqlite'
+    assert os.environ['OPENAI_API_KEY'] == 'unrelated-openai-key'
+    with connection() as con:
+        assert all(b'fake-runtime-token' not in row['content'] for row in
+                   con.execute('SELECT content FROM artifacts WHERE run_id=?', (rid,)))
+
+
+def test_missing_provider_or_key_never_uses_the_normal_codex_login(client, monkeypatch):
+    monkeypatch.setenv('PDVL_CODEX_ENABLED', '1')
+    pid = client.post('/api/projects', json={'title': 'Isolated configuration'}).json()['id']
+    endpoint = f'/api/projects/{pid}/runs'
+    monkeypatch.delenv('PDVL_TEST_TOKEN')
+    assert client.get('/api/models').json()['codex']['available'] is False
+    assert client.post(endpoint, json={'question': 'No key'}).status_code == 409
+    config = home() / 'codex/config.toml'
+    config.unlink()
+    assert client.get('/api/models').json()['codex']['configured'] is False
+    assert client.post(endpoint, json={'question': 'No config'}).status_code == 409
+    assert client.get(f'/api/projects/{pid}/runs').json() == []
+
+
+def test_locked_model_and_old_or_changed_runtime_cannot_resume(client, monkeypatch, bridge):
+    pid, rid = queue(client, monkeypatch)
+    response = client.post(f'/api/projects/{pid}/runs', json={'question': 'Try GPT', 'model_id': 'gpt-6.1-sol'})
+    assert response.status_code == 422
+    assert client.post(f'/api/projects/{pid}/runs', json={'question': 'No model override', 'model_id': 'test-model'}).status_code == 422
+    assert worker.process_one()['state'] == 'completed'
+    assert client.get(f'/api/projects/{pid}/runs').json()[0]['runtime_matches'] is True
+    config = home() / 'codex/config.toml'
+    original = config.read_text()
+    config.write_text(original.replace('localhost:9999', 'localhost:9998'))
+    assert client.get(f'/api/projects/{pid}/runs').json()[0]['runtime_matches'] is False
+    assert client.post(f'/api/runs/{rid}/continue', json={'message': 'Continue with another provider'}).status_code == 409
+    config.write_text(original)
+    with connection() as con:
+        context = json.loads(one('SELECT context_json FROM runs WHERE id=?', (rid,))['context_json'])
+        del context['codex_runtime']
+        con.execute('UPDATE runs SET context_json=? WHERE id=?', (json.dumps(context), rid))
+    assert client.get(f'/api/projects/{pid}/runs').json()[0]['runtime_matches'] is False
+    assert client.post(f'/api/runs/{rid}/continue', json={'message': 'Resume a legacy ChatGPT thread'}).status_code == 409
+    assert client.get(f'/api/runs/{rid}/artifacts').json()
+
+
+@pytest.mark.parametrize('change', [
+    lambda text: text.replace('requires_openai_auth = false', 'requires_openai_auth = true'),
+    lambda text: text.replace('responses', 'chat'),
+    lambda text: text.replace('env_key = "PDVL_TEST_TOKEN"', 'experimental_bearer_token = "inline-secret"'),
+])
+def test_runtime_requires_explicit_env_key_responses_provider(client, monkeypatch, change):
+    monkeypatch.setenv('PDVL_CODEX_ENABLED', '1')
+    config = home() / 'codex/config.toml'
+    config.write_text(change(config.read_text()))
+    status = client.get('/api/models').json()['codex']
+    assert status['configured'] is False and 'inline-secret' not in json.dumps(status)
+
+
+def test_key_removed_after_queueing_fails_without_launching_a_cli(client, monkeypatch):
+    _, rid = queue(client, monkeypatch)
+    monkeypatch.delenv('PDVL_TEST_TOKEN')
+    def fail(*args, **kwargs):
+        raise AssertionError('No subprocess should receive missing or unrelated credentials')
+    monkeypatch.setattr(worker.subprocess, 'Popen', fail)
+    result = worker.process_one()
+    assert result['state'] == 'failed' and 'Missing API key' in result['error']
+    assert client.get(f'/api/runs/{rid}/artifacts').json()
+
+
+def test_private_runtime_cannot_alias_the_normal_codex_home(client, monkeypatch, tmp_path):
+    from pathlib import Path
+    fake_user = tmp_path / 'ordinary-user'
+    fake_user.mkdir()
+    private = home() / 'codex'
+    private.rename(fake_user / '.codex')
+    private.symlink_to(fake_user / '.codex', target_is_directory=True)
+    monkeypatch.setattr(Path, 'home', lambda: fake_user)
+    assert client.get('/api/models').json()['codex']['configured'] is False

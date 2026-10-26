@@ -9,7 +9,7 @@ import selectors
 import signal
 import threading
 from pathlib import Path
-from .config import ROOT, home
+from .config import ROOT, home, codex_environment
 from .db import connection, utcnow, one, rows, uid, add_run_event
 from .research import research_context
 
@@ -187,6 +187,10 @@ def process_one(timeout_seconds: int = 600) -> dict | None:
         snapshot = json.loads(item['context_json'])
         if not snapshot.get('project'):
             raise ValueError('Run has no research snapshot; create a new task')
+        runtime = snapshot.get('codex_runtime')
+        if not runtime:
+            raise ValueError('Run has no isolated Codex runtime snapshot; create a new task')
+        env = codex_environment(runtime)
         subprocess.run(['git', 'init', '-q', str(workdir)], check=True, timeout=15)
         source_run = item['parent_run_id']
         # A continuation cancelled while queued never owned a workspace. Preserve
@@ -216,14 +220,14 @@ def process_one(timeout_seconds: int = 600) -> dict | None:
             question += ('This is a continuation in a NEW workspace restored from the previous run archive. '
                          'Use the current directory, inspect restored files first, and do not assume prior steps completed.\n\n')
         task = {'workdir': str(workdir), 'question': question + research_context(snapshot, 'investigate')
-                + '\n\nResearch question:\n' + item['question'], 'model': item['model_id'],
-                'provider': 'deepseek' if (item['model_id'] or '').startswith('deepseek-') else 'default',
+                + '\n\nResearch question:\n' + item['question'],
+                'runtime': runtime,
                 'thread_id': item['thread_id']}
         if one('SELECT state FROM runs WHERE id=?', (rid,))['state'] == 'cancelling' or STOP.is_set():
             return finish_run(item, 'interrupted' if STOP.is_set() else 'cancelled', '', '')
         with (path / 'events.jsonl').open('wb') as out, (path / 'stderr.txt').open('wb') as err:
             proc = subprocess.Popen(['node', str(ROOT / 'worker/codex/index.mjs')], stdin=subprocess.PIPE,
-                                    stdout=subprocess.PIPE, stderr=err, cwd=ROOT, start_new_session=True)
+                                    stdout=subprocess.PIPE, stderr=err, cwd=ROOT, env=env, start_new_session=True)
             proc.stdin.write(json.dumps(task).encode())
             proc.stdin.close()
             deadline, stopping, buffer = time.monotonic() + timeout_seconds, None, b''

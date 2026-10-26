@@ -13,7 +13,7 @@ One GitHub repository, one local web workspace, and independent research state. 
 - **Independent state:** projects, conversations, claims, evidence, decisions, runs, manuscript revisions, stored in SQLite; provider/model and API usage metadata recorded per assistant message.
 - **Multiple models:** OpenAI Responses API, DeepSeek V4 Responses API, custom Responses/Chat-Completions-compatible endpoints. For additional compatibility, extend the provider adapter or use a gateway like LiteLLM.
 - **Optional MCP:** local STDIO server exposes read-only research context to outside agent clients; not required by the standalone web UI.
-- **Update-friendly:** model registry; pinned SDK and Github dependabot CI. Do not silently change models for recorded research tasks.
+- **Update-friendly:** model registry and pinned SDK. Do not silently change models for recorded research tasks.
 
 ### Quick start (macOS / Linux)
 
@@ -32,13 +32,14 @@ Open **http://127.0.0.1:8765**. Start from the included CS-kernel demonstration 
 ### Codex SDK worker (optional but integrated)
 
 ```bash
-cd worker/codex && npm install && cd ../..
-# Install / authenticate Codex CLI according to official docs.
+npm --prefix worker/codex ci
+# Configure .local/codex/config.toml with the model and an env_key API provider.
+# See docs/PROVIDERS.md; keep the key in .env.
 # Set PDVL_CODEX_ENABLED=1 in .env
 ./scripts/start.sh
 ```
 
-The web interface now exposes **Investigate → Launch Codex research**. A separate Python worker consumes the SQLite job queue and calls the official TypeScript Codex SDK through `worker/codex/index.mjs`, which launches a task in a fresh Git workspace under `.local/runs/<run_id>/workspace`. Event traces are stored alongside the run, and the status is visible in the browser. **No automatic HPC submissions.** To use DeepSeek as Codex's *underlying model*, select it in the Codex Investigation model picker and configure Codex's own `model_providers.deepseek` according to its official guide (see `docs/PROVIDERS.md`), then pick that model for the agent task.
+The web interface exposes **Investigate → Launch Codex research**. A separate Python worker consumes the SQLite job queue and calls the pinned TypeScript Codex SDK through `worker/codex/index.mjs`, which launches a task in a fresh Git workspace under `.local/runs/<run_id>/workspace`. The CLI uses the private `.local/codex` config/session store and an explicit Responses API provider. It can share the chat provider's environment API key without using or changing the normal ChatGPT/Codex App subscription login. The page and API lock tasks to the configured model. Event traces, progress and artifacts remain inspectable. **No automatic HPC submissions.** See [provider setup](docs/PROVIDERS.md).
 
 ### Offline demonstrator
 
@@ -51,7 +52,7 @@ In the CS-kernel demo, use **Run scoped physical check** on two claims. The RG d
 3. Choose an artifact and claim, describe its relevance, and **Record as evidence**. The initial verdict is `unresolved`; recording evidence never automatically verifies a claim.
 4. In **Write**, place the cursor at the relevant passage and choose **Cite in manuscript** beside an evidence record. Save a revision. Inline `[evidence:ID]` citations are checked against the project; reopening the draft restores its source links.
 
-In **Investigate**, task cards automatically show new progress while work is active. **取消任务** stops a queued or running task and preserves any archived partial work. Once stopped, use **继续运行** with an optional next question: this creates a linked task, resumes the same Codex session and restores archived files into a new workspace. The earlier task, evidence and manuscript sources remain intact. Tasks that never established a Codex session must be submitted anew. Project selection and task navigation remain available in the narrow in-app browser layout.
+In **Investigate**, task cards automatically show new progress while work is active. **取消任务** stops a queued or running task and preserves any archived partial work. Once stopped, use **继续运行** with a next question: this creates a linked task, resumes the same Codex session and restores archived files into a new workspace. The earlier task, evidence and manuscript sources remain intact. Tasks with no saved session or a different runtime profile (including historical ChatGPT tasks) must be submitted anew. Project selection and task navigation remain available in the narrow in-app browser layout.
 
 The implementation adds one artifact table and reuses the existing revision reference field. Archives are limited to 10 MiB per run and reject symlinks. See [Architecture](docs/ARCHITECTURE.md) for the storage contract and migration behavior. Offline tests exercise the complete chain with a local mock agent; real provider/Codex authentication still requires separate testing.
 
@@ -66,7 +67,7 @@ node --test tests/test_runs_ui.mjs
 
 Testing the actual Codex runtime and real provider responses requires authorized API credentials and runtime dependencies; unit and API tests use isolated temporary databases and mocked model responses.
 
-Local integration validation on 2026-10-25: DeepSeek Flash returned a real chat response. Codex SDK 0.164.0, using an existing ChatGPT login and GPT-6.1 Sol, executed a small SymPy calculation with a negative control. The run completed, ten artifacts were archived and hash-checked, and a scoped evidence record was cited in a saved and reloaded manuscript revision. A separate shared-function derivation checked the result; the claim remained `idea`. A second live test used the page to cancel a foreground command (its heartbeat stopped), then resumed the same session in a restored workspace and completed a short symbolic calculation. Old archive hashes and manuscript sources were unchanged. This validates this local setup and narrow calculation, not all providers or arbitrary physics. Private run records remain under `.local/`; the current offline suite has 29 Python tests and 2 Node UI tests.
+Local integration validation on 2026-10-26: Codex SDK/CLI 0.164.0 with Ollama Cloud `deepseek-v4.1-flash:1017` created files, ran SymPy and checked a cancellation identity (`0`) with a negative control (`epsilon`). A foreground heartbeat task was cancelled and stopped; the same session resumed in a restored workspace and reran the symbolic checks. Archived hashes and the evidence → manuscript citation chain were checked, while the claim remained `idea`. Normal Codex config/auth hashes were unchanged and its ChatGPT login remained active. A final real command verified credential variables were absent from the shell environment; shell snapshots are disabled, and the key scan matched only the ignored `.env`. This validates the local pair and bounded tasks, not every CLI tool or model capability. Private runs remain under `.local/`. The offline suite has 38 Python tests and 4 Node UI tests.
 
 ### Source layout
 
@@ -78,8 +79,7 @@ pdvl-studio/
 ├── configs/          Explicit model IDs and defaults; no API secrets
 ├── docs/             Architecture, provider setup, scientific protocol
 ├── tests/            TestClient API/evidence/verification cases
-├── scripts/          One-command startup and optional GitHub publish helper
-└── .github/          CI + Dependabot
+└── scripts/          One-command startup and optional GitHub publish helper
 ```
 
 ### Publish as your own private GitHub repository
@@ -94,7 +94,7 @@ Or create an empty GitHub repository manually and `git push`. The system runs in
 
 ### Important scope boundaries
 
-This release is a **working integrated foundation**, not a finished scientific search engine: no credentialed API calls or real Codex run were performed in the packaging environment; no live arXiv retrieval, file-ingestion parser, remote auth, HPC scheduler, multi-user access, PDF citation resolver or production cost dashboard is claimed complete. The independent architecture makes those clear plugin additions rather than requiring a UI rewrite. Do not expose this unauthenticated local app on a public interface.
+This release is a **working integrated foundation**, not a finished scientific search engine: full-paper ingestion, remote auth, HPC scheduling, multi-user access, PDF citation resolution and production cost accounting remain unimplemented. Live checks above cover specific local models and small tasks. Do not expose this unauthenticated local app on a public interface.
 
 See [Architecture](docs/ARCHITECTURE.md), [Provider details](docs/PROVIDERS.md) and [Research protocol](docs/RESEARCH_PROTOCOL.md).
 

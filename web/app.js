@@ -32,11 +32,18 @@ function renderMarkdown(target,body){
 }
 async function init(){
   try {
-    const ms=await api('/models');models=ms.models;defaults=ms.defaults;
+    const ms=await api('/models');models=ms.models;defaults=ms.defaults;fillCodex(ms.codex);
     const ps=await api('/projects');
     if(!ps.length){await post('/seed-csk',{});}
     await reloadProjects();
   }catch(e){notify(e.message)}
+}
+function fillCodex(runtime){
+ const select=$('codexModel');select.replaceChildren();select.disabled=true;
+ const option=element('option');option.value=runtime.model||'';
+ option.textContent=runtime.configured?`${runtime.model} (${runtime.title})`:'Configure isolated Codex runtime';select.appendChild(option);select.value=option.value;
+ $('launchCodex').disabled=!runtime.available;
+ $('codexRuntime').textContent=runtime.configured?(runtime.available?'独立 API 环境 · 不使用 ChatGPT 订阅':'独立 Codex 环境缺少 API key'):runtime.detail;
 }
 async function reloadProjects(prefer){
  const projects=await api('/projects');$('projects').replaceChildren();
@@ -47,6 +54,7 @@ async function reloadProjects(prefer){
 function fillModels(){
  const select=$('model');select.replaceChildren();
  for(const m of models){const o=element('option');o.value=m.id;o.textContent=m.title+(!m.available?' (set API key)':'');select.appendChild(o)}
+ select.disabled=models.length===1;
  const best=modelSelections[mode]||defaults[mode];select.value=models.some(m=>m.id===best)?best:defaults[mode];syncModelState();
 }
 function syncModelState(){const m=models.find(x=>x.id===$('model').value);$('modelState').textContent=m?.available?'Connected':'API key needed';$('modelState').classList.toggle('ok',!!m?.available)}
@@ -71,7 +79,7 @@ async function refreshMessages(){
 }
 function appendMessage(role,body,modelId){
  const msg=element('article','msg '+role);const avatar=element('div','avatar');avatar.textContent=role==='assistant'?'∇':'U';
- const right=element('div','msg-body');const head=element('div','msg-header');const label=element('strong');label.textContent=role==='assistant'?'PDVL / '+(models.find(x=>x.id===modelId)?.title||'Research model'):'You';head.appendChild(label);
+ const right=element('div','msg-body');const head=element('div','msg-header');const label=element('strong');label.textContent=role==='assistant'?'PDVL / '+(models.find(x=>x.id===modelId)?.title||modelId||'Research model'):'You';head.appendChild(label);
  const content=element('div','message-content');renderMarkdown(content,body);right.append(head,content);msg.append(avatar,right);$('timeline').appendChild(msg);return msg;
 }
 function scrollToBottom(){const area=document.querySelector('.conversation-area');area.scrollTop=area.scrollHeight}
@@ -208,12 +216,12 @@ function refreshRuns(){
      await Promise.all(runs.map(async r=>{
        const view=runViews.get(r.id);view.state=r.state;
        view.header.textContent=r.title+' — '+(runLabels[r.state]||r.state);
-       view.relation.textContent=r.parent_run_id?'继续自任务 '+r.parent_run_id:'';
+       view.relation.textContent=r.runtime_matches?(r.parent_run_id?'继续自任务 '+r.parent_run_id:''):'历史运行环境；请参考归档创建新任务';
        view.output.textContent=r.output;view.output.classList.toggle('hidden',!r.output);
        view.error.textContent=r.error;view.error.classList.toggle('hidden',!r.error);
        view.cancel.classList.toggle('hidden',!activeRun(r));view.cancel.disabled=r.state==='cancelling';
        view.cancel.textContent=r.state==='cancelling'?'正在停止…':'取消任务';
-       view.resume.classList.toggle('hidden',activeRun(r)||!r.thread_id||parents.has(r.id));
+       view.resume.classList.toggle('hidden',!r.runtime_matches||activeRun(r)||!r.thread_id||parents.has(r.id));
        if(!view.eventsDone||activeRun(r)){
          const page=await api(`/runs/${r.id}/events?after=${view.cursor}`);
          if(!current())return;
@@ -244,7 +252,7 @@ function refreshRuns(){
  })();
  return runRequest;
 }
-async function startCodex(){const question=$('codexQuestion').value.trim();if(!question)return;try{const r=await post(`/projects/${project}/runs`,{question,model_id:$('codexModel').value||null});notify('Research queued: '+r.id);$('codexQuestion').value='';stopRunPolling();await refreshRuns()}catch(e){notify(e.message)}}
+async function startCodex(){const question=$('codexQuestion').value.trim();if(!question)return;try{const r=await post(`/projects/${project}/runs`,{question});notify('Research queued: '+r.id);$('codexQuestion').value='';stopRunPolling();await refreshRuns()}catch(e){notify(e.message)}}
 async function refreshDocuments(){
  const selected=$('documentSelect').value,docs=await api(`/projects/${project}/documents`);$('documentSelect').replaceChildren();
  const none=text(element('option'),'New document');none.value='';$('documentSelect').appendChild(none);

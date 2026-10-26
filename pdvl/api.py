@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from markdown_it import MarkdownIt
 import bleach
-from .config import ROOT, model_settings
+from .config import ROOT, model_settings, codex_runtime, codex_public
 from .db import init_db, one, rows, execute, uid, utcnow, append_evidence, connection, add_run_event
 from .prompts import MODE_PROMPTS, DEFAULT_SCIENTIFIC_VOICE
 from .research import project_snapshot, research_context, citation_ids
@@ -65,7 +65,6 @@ class NewRun(BaseModel):
     model_config = {'extra': 'forbid'}
     question: str = Field(min_length=1, max_length=10000)
     title: str = Field(default="Codex investigation", max_length=250)
-    model_id: str | None = None
 
 class ContinueRun(BaseModel):
     message: str = Field(min_length=1, max_length=10000)
@@ -89,6 +88,18 @@ def project_required(pid: str) -> dict:
     if not project:
         raise HTTPException(404, "Project not found")
     return project
+
+
+def codex_required() -> dict:
+    if os.getenv('PDVL_CODEX_ENABLED', '0') != '1':
+        raise HTTPException(409, 'Codex worker disabled; configure the isolated provider and set PDVL_CODEX_ENABLED=1')
+    try:
+        runtime = codex_runtime()
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+    if not os.getenv(runtime['env_key']):
+        raise HTTPException(409, 'Missing API key for the isolated Codex provider')
+    return runtime
 
 @app.get("/")
 def home_page():
@@ -114,7 +125,8 @@ def health():
 @app.get("/api/models")
 def models():
     settings = model_settings()
-    return {"models": models_public(), "defaults": {m: settings[m] for m in MODE_PROMPTS}}
+    return {"models": models_public(), "defaults": {m: settings[m] for m in MODE_PROMPTS},
+            "codex": codex_public()}
 
 @app.get("/api/projects")
 def list_projects():
@@ -138,7 +150,10 @@ def messages(pid: str, mode: Literal["discuss", "investigate", "verify", "write"
 @app.post("/api/projects/{pid}/chat")
 async def chat(pid: str, req: NewMessage):
     project_required(pid)
-    model = pick_model(req.mode, req.model_id)
+    try:
+        model = pick_model(req.mode, req.model_id)
+    except ValueError as error:
+        raise HTTPException(422, str(error))
     prior = rows("SELECT * FROM messages WHERE project_id=? AND mode=? ORDER BY rowid DESC LIMIT 16", (pid, req.mode))
     conversation = [{"role": r["role"], "content": r["content"]} for r in reversed(prior)]
     conversation.append({"role": "user", "content": req.message})
@@ -213,22 +228,27 @@ def run_verification(pid: str, cid: str, test_id: str):
 @app.get("/api/projects/{pid}/runs")
 def list_runs(pid: str):
     project_required(pid)
-    return rows("SELECT id,project_id,title,question,state,agent,model_id,created_at,updated_at,"
-                "started_at,ended_at,output,error,thread_id,parent_run_id FROM runs WHERE project_id=? ORDER BY rowid DESC", (pid,))
+    items = rows("SELECT * FROM runs WHERE project_id=? ORDER BY rowid DESC", (pid,))
+    try:
+        runtime = codex_runtime()
+    except ValueError:
+        runtime = None
+    for item in items:
+        item['runtime_matches'] = runtime is not None and json.loads(item.pop('context_json')).get('codex_runtime') == runtime
+    return items
 
 @app.post("/api/projects/{pid}/runs", status_code=202)
 def start_run(pid: str, req: NewRun):
     project_required(pid)
-    if os.getenv("PDVL_CODEX_ENABLED", "0") != "1":
-        raise HTTPException(409, "Codex worker disabled; set PDVL_CODEX_ENABLED=1 after configuring the isolated worker")
+    runtime = codex_required()
     rid = uid("r")
     now = utcnow()
-    snapshot = json.dumps(project_snapshot(pid), ensure_ascii=False)
+    snapshot = json.dumps({**project_snapshot(pid), 'codex_runtime': runtime}, ensure_ascii=False)
     with connection() as con:
         con.execute("INSERT INTO runs(id,project_id,title,question,state,agent,model_id,created_at,updated_at,context_json) "
                     "VALUES (?,?,?,?,?,?,?,?,?,?)",
                     (rid, pid, req.title, req.question, "queued", "codex-sdk",
-                     req.model_id or os.getenv('PDVL_CODEX_MODEL') or None, now, now, snapshot))
+                     runtime['model'], now, now, snapshot))
         add_run_event(con, rid, 'queued', '任务已排队')
     return one("SELECT * FROM runs WHERE id=?", (rid,))
 
@@ -267,10 +287,11 @@ def cancel_run(rid: str):
 
 @app.post('/api/runs/{rid}/continue', status_code=202)
 def continue_run(rid: str, req: ContinueRun):
-    if os.getenv('PDVL_CODEX_ENABLED', '0') != '1':
-        raise HTTPException(409, 'Codex worker disabled')
+    runtime = codex_required()
     parent = get_run(rid)
-    snapshot = json.dumps(project_snapshot(parent['project_id']), ensure_ascii=False)
+    if json.loads(parent['context_json']).get('codex_runtime') != runtime:
+        raise HTTPException(409, 'This session belongs to a different Codex runtime; create a new task from its archived findings')
+    snapshot = json.dumps({**project_snapshot(parent['project_id']), 'codex_runtime': runtime}, ensure_ascii=False)
     child = uid('r')
     with connection() as con:
         con.execute('BEGIN IMMEDIATE')

@@ -51,6 +51,14 @@ The worker consumes JSONL events while Codex executes. `thread.started` immediat
 
 Continuation is the sole resume entry point; arbitrary `thread_id` input on new task creation was removed. It never rewrites the parent's artifacts, evidence or revisions. The only new storage is the progress table and a self-referencing parent column on `runs`; there is no separate broker or streaming service.
 
+## Isolated agent provider configuration
+
+`PDVL_HOME/codex/config.toml` is the single model/provider configuration for new Codex tasks. The supported authentication path is an explicit Responses provider with `env_key` and `requires_openai_auth=false`. The worker supplies a small child environment containing the selected API-key variable and OS/process essentials. Both `CODEX_HOME` and `CODEX_SQLITE_HOME` point to this private directory; inherited app session/credential overrides are excluded. The bridge pins ephemeral credential storage and the frozen provider settings, disables shell snapshots that could persist keys, and restricts command environment inheritance to core OS variables. Nothing writes to the ordinary Codex configuration or auth store.
+
+`runs.context_json.codex_runtime` freezes non-secret provider metadata alongside research state. This reuses the snapshot instead of adding another config table or API secret field. The worker uses that frozen runtime, even if the private configuration changes after queuing. Model-prefix guessing and `PDVL_CODEX_MODEL` were removed. The UI shows the configured model; the task API no longer accepts model overrides. Missing configuration or authentication fails explicitly.
+
+Continuation compares the parent's frozen runtime with the current profile before queueing. Historical sessions without this metadata and sessions from another provider/model/home cannot cross into the new runtime. Their scientific records remain readable. The run list exposes `runtime_matches` so the page hides unavailable continuation controls. Local CLI session state lives in the private Codex home; the research database archive preserves evidence bytes, not a portable replacement for the CLI session store.
+
 ## Scientific review protocol
 
 A test must declare the **class of claim** it checks. The RG-difference verifier is valid for one algebraic identity under common anomalous dimension; it does not confirm a generic user claim, cross-process observability, finite-resolution phenomenology or uniqueness of an inverse reconstruction. No silent promotions beyond a canonical seeded claim with known statement and a narrow formal test.

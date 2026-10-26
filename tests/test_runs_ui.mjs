@@ -8,7 +8,7 @@ function setup(){
  const nodes=new Map(),timers=new Map(),calls=[];
  let timerId=0;
  class Element{
-   constructor(tag='div'){this.tagName=tag;this.children=[];this.value='';this.style={};this.dataset={};this.disabled=false;this.classList={toggle(){},add(){},remove(){}};this._text=''}
+   constructor(tag='div'){this.tagName=tag;this.children=[];this.value='';this.style={};this.dataset={};this.disabled=false;const classes=new Set();this.classList={toggle(name,on){if(on)classes.add(name);else classes.delete(name)},add(name){classes.add(name)},remove(name){classes.delete(name)},contains(name){return classes.has(name)}};this._text=''}
    set id(value){this._id=value;nodes.set(value,this)}
    get id(){return this._id}
    set textContent(value){this._text=value;this.children=[]}
@@ -51,7 +51,7 @@ function setup(){
  vm.runInContext("project='p';activeProject='p';mode='investigate';",context);
  return {context,data,timers,calls,document,view:id=>vm.runInContext(`runViews.get('${id}')`,context),run:code=>vm.runInContext(code,context)};
 }
-function run(id,state){return {id,title:id,question:'A question',state,thread_id:'thread',parent_run_id:null,output:'',error:''}}
+function run(id,state){return {id,title:id,question:'A question',state,thread_id:'thread',parent_run_id:null,output:'',error:'',runtime_matches:true}}
 
 test('polling adds progress once and preserves entered continuation text and DOM identity',async()=>{
  const app=setup();app.data.runs=[run('live','running'),run('done','completed')];
@@ -81,4 +81,28 @@ test('an in-flight response from the previous project cannot populate the new pr
  resolve({ok:true,json:async()=>[run('stale','running')]});
  await request;
  assert.equal(app.view('stale'),undefined);assert.equal(app.timers.size,0);
+});
+
+test('a single-model registry disables model switching and selects its configured default',()=>{
+ const app=setup();
+ app.run("models=[{id:'ollama-deepseek-flash',title:'DeepSeek Flash (Ollama)',available:true}];defaults={investigate:'ollama-deepseek-flash'};fillModels();");
+ const select=app.document.getElementById('model');
+ assert.equal(select.disabled,true);assert.equal(select.value,'ollama-deepseek-flash');assert.equal(select.children.length,1);
+ app.run("models.push({id:'another',title:'Another',available:true});fillModels();");
+ assert.equal(select.disabled,false);
+});
+
+test('Codex uses only the configured model and hides continuation from another runtime',async()=>{
+ const app=setup();
+ app.run("fillCodex({configured:true,available:true,model:'deepseek-v4.1-flash:1017',provider:'pdvl_ollama',title:'Ollama'});");
+ const picker=app.document.getElementById('codexModel');
+ assert.equal(picker.disabled,true);assert.equal(picker.children.length,1);assert.equal(picker.value,'deepseek-v4.1-flash:1017');
+ assert.equal(app.document.getElementById('launchCodex').disabled,false);
+ app.data.runs=[run('current','completed'),{...run('old','completed'),runtime_matches:false}];
+ await app.run('refreshRuns()');
+ assert.equal(app.view('old').resume.classList.contains('hidden'),true);
+ assert.equal(app.view('current').resume.classList.contains('hidden'),false);
+ assert.match(app.document.getElementById('codexRuntime').textContent,/不使用 ChatGPT 订阅/);
+ app.run("fillCodex({configured:false,available:false,detail:'Configure isolated runtime'});");
+ assert.equal(app.document.getElementById('launchCodex').disabled,true);assert.equal(picker.value,'');
 });

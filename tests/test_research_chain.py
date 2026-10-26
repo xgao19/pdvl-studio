@@ -53,7 +53,7 @@ def project(client, title='Research'):
 def queue(client, monkeypatch, pid):
     monkeypatch.setenv('PDVL_CODEX_ENABLED', '1')
     result = client.post(f'/api/projects/{pid}/runs', json={
-        'question': 'Check the relation', 'model_id': 'test-model'})
+        'question': 'Check the relation'})
     assert result.status_code == 202
     return result.json()
 
@@ -191,12 +191,13 @@ def test_preparation_failure_is_recorded(client, monkeypatch):
 def test_configured_model_is_frozen_at_queue_time(client, monkeypatch, bridge):
     pid, _ = project(client)
     monkeypatch.setenv('PDVL_CODEX_ENABLED', '1')
-    monkeypatch.setenv('PDVL_CODEX_MODEL', 'model-at-queue-time')
+    config = home() / 'codex/config.toml'
+    config.write_text(config.read_text().replace('test-model', 'model-at-queue-time'))
     run = client.post(f'/api/projects/{pid}/runs', json={'question': 'Check this'}).json()
-    monkeypatch.setenv('PDVL_CODEX_MODEL', 'different-model')
+    config.write_text(config.read_text().replace('model-at-queue-time', 'different-model'))
     assert process_one()['state'] == 'completed'
     received = json.loads((home() / 'runs' / run['id'] / 'workspace' / 'received.json').read_text())
-    assert received['model'] == run['model_id'] == 'model-at-queue-time'
+    assert received['runtime']['model'] == run['model_id'] == 'model-at-queue-time'
 
 
 @pytest.mark.parametrize('mode', ['empty', 'failed', 'timeout'])

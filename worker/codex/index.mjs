@@ -14,18 +14,34 @@ try {
   const task = JSON.parse(raw);
   if (!task.workdir || !task.question) throw new Error("Missing workdir or question");
   const { Codex } = await import("@openai/codex-sdk");
-  // Provider settings live in the Codex environment/config, not this application.
-  const config = task.provider === "deepseek" ? { model_provider: "deepseek" } : {};
+  const runtime = task.runtime;
+  if (!runtime?.provider || process.env.CODEX_HOME !== runtime.home || process.env.CODEX_SQLITE_HOME !== runtime.home) {
+    throw new Error("Missing isolated Codex runtime environment");
+  }
+  // Freeze the explicit provider at queue time; never infer it from a model name.
+  const config = {
+    model_provider: runtime.provider,
+    sqlite_home: runtime.home,
+    cli_auth_credentials_store: "ephemeral",
+    // CLI authentication needs the API key; executed shell commands and snapshots do not.
+    features: {shell_snapshot: false},
+    shell_environment_policy: {inherit: "core"},
+    model_providers: {[runtime.provider]: {
+      name: runtime.name, base_url: runtime.base_url, env_key: runtime.env_key,
+      wire_api: "responses", requires_openai_auth: false,
+    }},
+  };
   const codex = new Codex({config});
   const options = {
+    model: runtime.model,
     workingDirectory: task.workdir,
     sandboxMode: "workspace-write",
+    approvalPolicy: "never",
     // Network is disabled; no remote tool/HPC access is implicitly authorized.
     networkAccessEnabled: false,
     webSearchMode: "disabled",
     skipGitRepoCheck: false,
   };
-  if (task.model) options.model = task.model;
   const thread = task.thread_id ? codex.resumeThread(task.thread_id, options) : codex.startThread(options);
   let finalResponse = "";
   const { events } = await thread.runStreamed(task.question, {signal: controller.signal});
