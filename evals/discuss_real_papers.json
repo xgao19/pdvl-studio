@@ -1,0 +1,698 @@
+{
+  "version": 2,
+  "scope": "Twenty diagnostic questions about three pinned CS-kernel papers; labels are source-based annotations, not independently certified physics. PDF page positions, not printed page labels. Gold rubrics and anchors are never sent to the answer model.",
+  "sources": [
+    {
+      "id": "ratio",
+      "arxiv_id": "2206.01105v1",
+      "title": "Determination of Collins-Soper kernel from cross-sections ratios",
+      "url": "https://arxiv.org/abs/2206.01105v1",
+      "pdf_sha256": "cf1537ac9148ad4af7479b88852d2b2a2ad0308d45d033fa98704d0866d996f9",
+      "pages_sha256": "a6f28e84c9dd62029a48a9d18bd194e3ace2321f435160af5a5a8ae4156b24ae",
+      "page_count": 5
+    },
+    {
+      "id": "quenched",
+      "arxiv_id": "2003.06063v2",
+      "title": "Collins-Soper Kernel for TMD Evolution from Lattice QCD",
+      "url": "https://arxiv.org/abs/2003.06063v2",
+      "pdf_sha256": "0fb2ee000b1e1304e5b82643061740c39c06e021e53de536236a64d2f9ebb0a5",
+      "pages_sha256": "5aea8be52465a82097c86224054d6aaf1f9b59c0a225a25ec4ba4aea485560d3",
+      "page_count": 22
+    },
+    {
+      "id": "dynamical",
+      "arxiv_id": "2103.16991v3",
+      "title": "Determination of the Collins-Soper Kernel from Lattice QCD",
+      "url": "https://arxiv.org/abs/2103.16991v3",
+      "pdf_sha256": "d82a13954dc32ac04fd71161fd6de56bb13e40d94813418b0a3bc63a302c7564",
+      "pages_sha256": "a9c166348d61758cdf927783eeeea242638dd46c4ad8e4c195327b19889b420d",
+      "page_count": 23
+    }
+  ],
+  "cases": [
+    {
+      "id": "Q01",
+      "category": "single_zh",
+      "question": "2206.01105v1 的 CASCADE 方法演示使用什么数据和参数输入？这是否等于完成真实实验数据提取？",
+      "facts": [
+        {
+          "id": "data",
+          "statement": "使用 CASCADE 生成的伪数据；PB-TMD 演化参数由 HERA 包容 DIS 约束。",
+          "references": [
+            {
+              "paper": "ratio",
+              "page": 3,
+              "anchor": "inclusive HERA"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "scope",
+          "statement": "这是生成器内的方法与相容性检验；不能宣称已完成真实实验数据提取。",
+          "references": [
+            {
+              "paper": "ratio",
+              "page": 4,
+              "anchor": "method is tested"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q02",
+      "category": "paired_en",
+      "question": "In 2206.01105v1, what data and parameter inputs drive the CASCADE demonstration? Is it an extraction from real experimental data?",
+      "facts": [
+        {
+          "id": "data",
+          "statement": "CASCADE pseudodata, with PB-TMD parameters determined from inclusive HERA DIS.",
+          "references": [
+            {
+              "paper": "ratio",
+              "page": 3,
+              "anchor": "inclusive HERA"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "scope",
+          "statement": "Generator demonstration is not a completed extraction from measured data.",
+          "references": [
+            {
+              "paper": "ratio",
+              "page": 4,
+              "anchor": "method is tested"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q03",
+      "category": "kinematics",
+      "question": "2206.01105v1 中怎样选 s、Q、y 才能在截面比中消掉 TMD？积分分箱的 δQ 与 δy 有什么限制？",
+      "facts": [
+        {
+          "id": "matching",
+          "statement": "选择 s1/s2=Q1²/Q2²，使两组 x1,x2 相同；比较相同快度。",
+          "references": [
+            {
+              "paper": "ratio",
+              "page": 2,
+              "anchor": "variablesx1,2 are identical"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "bins",
+          "statement": "δQ≪Q，且两组使用相同 δy；不是任意两个能量截面都能相消。",
+          "references": [
+            {
+              "paper": "ratio",
+              "page": 2,
+              "anchor": "same forΣ1 and Σ2"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q04",
+      "category": "numerics",
+      "question": "2206.01105v1 的离散 Hankel 变换为何不能无条件延伸到任意大 b？说明 qT 分箱、稳定区间与误差估计。",
+      "facts": [
+        {
+          "id": "bins",
+          "statement": "示例 qT bin=0.05 GeV，稳定达到 b 约4–5 GeV⁻¹；使用 bootstrap 并扰动 bin 内 qT。",
+          "references": [
+            {
+              "paper": "ratio",
+              "page": 3,
+              "anchor": "0.05GeV"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "instability",
+          "statement": "更大 b 对有限 bin 敏感而不稳定；小的高 qT 截断误差不等于有限 bin 误差消失。",
+          "references": [
+            {
+              "paper": "ratio",
+              "page": 3,
+              "anchor": "finite-bin eﬀects"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q05",
+      "category": "overclaim",
+      "question": "2206.01105v1 的大 b 线性渐近结果属于什么对象？能否据此断言真实 QCD 核的精确普适渐近形式？",
+      "facts": [
+        {
+          "id": "asymptotic",
+          "statement": "线性大 b 拟合是该文从 CASCADE 伪数据得到的核的表现。",
+          "references": [
+            {
+              "paper": "ratio",
+              "page": 4,
+              "anchor": "CASCADE suggests a linear"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "scope",
+          "statement": "保留生成器与有限 b 范围限制，不把线性拟合升级为真实 QCD 的严格渐近定理。",
+          "references": [
+            {
+              "paper": "ratio",
+              "page": 3,
+              "anchor": "inverse function is sensitive"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q06",
+      "category": "validity",
+      "question": "2206.01105v1 的 Drell–Yan 方法对 qT/Q、Q 与强作用尺度、Z 玻色子有什么适用条件？约 1% 修正对应哪里？",
+      "facts": [
+        {
+          "id": "power",
+          "statement": "领头幂 TMD 公式适用于小 qT/Q；文中约1%是 qT=0.1Q 附近的估计。",
+          "references": [
+            {
+              "paper": "ratio",
+              "page": 2,
+              "anchor": "∼ 1% at qT = 0.1Q"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "window",
+          "statement": "忽略 QCD 幂修正需 Q≫ΛQCD；忽略 Z 中间态需 Q≪MZ，否则需修正硬因子。",
+          "references": [
+            {
+              "paper": "ratio",
+              "page": 2,
+              "anchor": "Z-boson can be included"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q07",
+      "category": "setup",
+      "question": "2003.06063v2 用什么海夸克设置、外态及 pion 质量？态无关性是否意味着所有有限动量误差也无关？",
+      "facts": [
+        {
+          "id": "ensemble",
+          "statement": "单个 quenched Nf=0 ensemble，pion 外态，质量1.207(3) GeV。",
+          "references": [
+            {
+              "paper": "quenched",
+              "page": 4,
+              "anchor": "1.207(3) GeV"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "state",
+          "statement": "核本身态无关，但幂修正并非态无关；这也不是物理点含海夸克的结果。",
+          "references": [
+            {
+              "paper": "quenched",
+              "page": 4,
+              "anchor": "power-corrections to the"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q08",
+      "category": "renormalization",
+      "question": "2003.06063v2 的准 beam function 中，Dirac 结构混合贡献有多大？能否只算 γ4 就保证更高精度？",
+      "facts": [
+        {
+          "id": "mixing",
+          "statement": "在所研究参数下，混合对重整化准 beam function 的合计贡献为5%–25%。",
+          "references": [
+            {
+              "paper": "quenched",
+              "page": 6,
+              "anchor": "5%–25% level"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "precision",
+          "statement": "要优于这一精度，需要多个 Dirac 结构；这不是普适的最终核误差范围。",
+          "references": [
+            {
+              "paper": "quenched",
+              "page": 6,
+              "anchor": "require bare"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q09",
+      "category": "fourier",
+      "question": "Why does 2003.06063v2 model the longitudinal quasi beam function before Fourier transformation? Is its final kernel model independent?",
+      "facts": [
+        {
+          "id": "truncation",
+          "statement": "最大 bz 处信号尚未与零相容，直接变换有显著截断效应，因此采用 Hermite/Bernstein 模型。",
+          "references": [
+            {
+              "paper": "quenched",
+              "page": 6,
+              "anchor": "not yet consistent with"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "dependence",
+          "statement": "本文数据不能产生模型无关的结果；两个模型相容不是消除了模型依赖。",
+          "references": [
+            {
+              "paper": "quenched",
+              "page": 6,
+              "anchor": "cannot be achieved from"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q10",
+      "category": "matching",
+      "question": "2003.06063v2 的最终模型分析采用怎样的微扰匹配阶次？能否说已严格控制所有高阶匹配和幂修正？",
+      "facts": [
+        {
+          "id": "order",
+          "statement": "模型采用匹配系数的领头阶 CTMDns=1；高阶匹配效应在本文被忽略。",
+          "references": [
+            {
+              "paper": "quenched",
+              "page": 6,
+              "anchor": "eﬀects are thus neglected"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "uncertainty",
+          "statement": "不能称高阶和幂修正已完全受控；其系数未被模型拟合约束。",
+          "references": [
+            {
+              "paper": "quenched",
+              "page": 11,
+              "anchor": "coeﬃcients of these power"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q11",
+      "category": "future_control",
+      "question": "2003.06063v2 认为未来实现受控、模型无关 CS 核需要哪些改进？只增加统计量够吗？",
+      "facts": [
+        {
+          "id": "improvements",
+          "statement": "扩大物理体积和 bz 范围、提高 boost/staple 范围以控制截断与幂修正。",
+          "references": [
+            {
+              "paper": "quenched",
+              "page": 10,
+              "anchor": "improvements will be essential"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "limits",
+          "statement": "还需无限体积与连续极限；不能说仅增加统计量已足够。",
+          "references": [
+            {
+              "paper": "quenched",
+              "page": 11,
+              "anchor": "limits must also ultimately"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q12",
+      "category": "setup",
+      "question": "2103.16991v3 的 H101 是 quenched 还是 dynamical？给出 Nf、格距与质量，并说明是否已外推到物理点。",
+      "facts": [
+        {
+          "id": "ensemble",
+          "statement": "动力学 Nf=2+1 clover，a=0.0854 fm，mπ=mK=422 MeV。",
+          "references": [
+            {
+              "paper": "dynamical",
+              "page": 1,
+              "anchor": "dynamicalNf = 2 + 1"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "physical",
+          "statement": "这里只用一个 H101 ensemble、非物理质量；物理点外推留待后续。",
+          "references": [
+            {
+              "paper": "dynamical",
+              "page": 3,
+              "anchor": "extrapolation to the physical point"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q13",
+      "category": "method",
+      "question": "2103.16991v3 为什么研究第一 Mellin 矩、只用 ℓ=0 比值？是否因此完全去掉了 x 依赖的模型假设？",
+      "facts": [
+        {
+          "id": "moment",
+          "statement": "第一矩避开困难的 x 空间 Fourier 重构；利用不同核子动量的 qTMD 比值。",
+          "references": [
+            {
+              "paper": "dynamical",
+              "page": 3,
+              "anchor": "study the ﬁrst"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "assumption",
+          "statement": "x 依赖进入未知积分组合，仍需其近似不随 b 变的模型假设；适用范围有限。",
+          "references": [
+            {
+              "paper": "dynamical",
+              "page": 3,
+              "anchor": "This is a model assumption"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q14",
+      "category": "correlated_error",
+      "question": "2103.16991v3 怎样处理 M(b) 与归一化？由它得到的 δK 是否等于全部系统误差？",
+      "facts": [
+        {
+          "id": "normalization",
+          "statement": "假设 M 对 b 为常数，在微扰与因子化共同适用的 b 附近匹配归一化，带来关联 δK。",
+          "references": [
+            {
+              "paper": "dynamical",
+              "page": 9,
+              "anchor": "correlated systematic uncertainty"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "incomplete",
+          "statement": "δK 是完全关联的不确定性分量，未估计的系统误差可能更大，不能当总误差。",
+          "references": [
+            {
+              "paper": "dynamical",
+              "page": 20,
+              "anchor": "may be exceeded"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q15",
+      "category": "range",
+      "question": "2103.16991v3 认为提取可靠的 b 范围是多少？为什么小 b 和大 b 两端不能直接信任？",
+      "facts": [
+        {
+          "id": "range",
+          "statement": "作者给出的可靠窗口约0.8–2.5 GeV⁻¹。",
+          "references": [
+            {
+              "paper": "dynamical",
+              "page": 17,
+              "anchor": "0.8 ≲b ≲ 2.5GeV"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "ends",
+          "statement": "小 b 有1/(|b|P+)幂修正，大 b 有 staple 太短、plateau 未到达的系统偏移。",
+          "references": [
+            {
+              "paper": "dynamical",
+              "page": 17,
+              "anchor": "Small size of staple"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q16",
+      "category": "channels",
+      "question": "2103.16991v3 的 Sivers 情形为何不能直接沿用无偏振通道的稳定假设？哪些实际提取通道最终被排除？",
+      "facts": [
+        {
+          "id": "sivers",
+          "statement": "Sivers 积分非正定，可导致比值奇异和巨大误差；最终排除 Sivers、Boer–Mulders 与 pretzelosity 对应通道。",
+          "references": [
+            {
+              "paper": "dynamical",
+              "page": 8,
+              "anchor": "ratios (2.20) are singular"
+            },
+            {
+              "paper": "dynamical",
+              "page": 20,
+              "anchor": "force us to exclude"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "cause",
+          "statement": "区分非正定比值的理论风险与实际分析中严重 lattice artifacts 导致的排除；不能称所有通道同样受控。",
+          "references": [
+            {
+              "paper": "dynamical",
+              "page": 17,
+              "anchor": "artifacts completely ruin"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q17",
+      "category": "power_corrections",
+      "question": "2103.16991v3 的约 30%–40% 幂修正估计来自什么比较？它是否就是最终 CS 核的总相对误差？",
+      "facts": [
+        {
+          "id": "estimate",
+          "statement": "由 bad/good 分量比估计：b约2.5 GeV⁻¹、P+=1.25/2.27 GeV 时约40%/30%。",
+          "references": [
+            {
+              "paper": "dynamical",
+              "page": 17,
+              "anchor": "ratio of a “bad”"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "interpretation",
+          "statement": "它不是核的总相对误差；比值中部分相消并可由 M 拟合吸收，仍有其他系统误差。",
+          "references": [
+            {
+              "paper": "dynamical",
+              "page": 17,
+              "anchor": "mostly cancel"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q18",
+      "category": "comparison",
+      "question": "比较 2206.01105v1、2003.06063v2 和 2103.16991v3：各自数据来源和主要方法障碍是什么？结果接近是否证明物理 QCD 普适性？",
+      "facts": [
+        {
+          "id": "sources",
+          "statement": "区分 CASCADE 伪数据、Nf=0 重 pion 格点和 Nf=2+1 非物理质量 H101 格点。",
+          "references": [
+            {
+              "paper": "ratio",
+              "page": 3,
+              "anchor": "pseudo-data"
+            },
+            {
+              "paper": "quenched",
+              "page": 4,
+              "anchor": "1.207(3) GeV"
+            },
+            {
+              "paper": "dynamical",
+              "page": 1,
+              "anchor": "422 MeV"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "comparison",
+          "statement": "需保留 Fourier 建模、第一矩常数假设及不同海夸克设置，不能把接近视为完整物理普适性证明。",
+          "references": [
+            {
+              "paper": "quenched",
+              "page": 6,
+              "anchor": "models are used"
+            },
+            {
+              "paper": "dynamical",
+              "page": 20,
+              "anchor": "central assumption"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q19",
+      "category": "conventions",
+      "question": "对照 2206.01105v1 式(3) 与 2103.16991v3 式(2.12)：若使用同一个 ζ 导数，D 与 K 是否只差负号？叠图还需核对什么？",
+      "facts": [
+        {
+          "id": "factor",
+          "statement": "前者 d ln f/d ln ζ=-D，后者 d ln Φ/d ln ζ=K/2；同约定下 K=-2D，不能只翻转符号。",
+          "references": [
+            {
+              "paper": "ratio",
+              "page": 2,
+              "anchor": "d lnζ =−D"
+            },
+            {
+              "paper": "dynamical",
+              "page": 6,
+              "anchor": "Kf(b,µ )2"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "alignment",
+          "statement": "先核对原始公式、ζ定义、单位和共同重整化尺度；抽取文本可能破坏公式排版，不能把D和K直接同幅叠图。",
+          "references": [
+            {
+              "paper": "ratio",
+              "page": 2,
+              "anchor": "d lnζ =−D"
+            },
+            {
+              "paper": "dynamical",
+              "page": 6,
+              "anchor": "Kf(b,µ )2"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q20",
+      "category": "unanswerable",
+      "question": "这三篇是否提供了同一物理点、连续极限下 CS 核在 b=5 GeV⁻¹ 的联合 95% 置信区间？若没有，说明缺口，不要编造数值。",
+      "facts": [
+        {
+          "id": "abstain",
+          "statement": "这些来源没有给出所要求的共同物理点连续极限联合95%区间，应明确无法据此提供数值。",
+          "references": [
+            {
+              "paper": "quenched",
+              "page": 11,
+              "anchor": "limits must also ultimately"
+            },
+            {
+              "paper": "dynamical",
+              "page": 3,
+              "anchor": "extrapolation to the physical point"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        {
+          "id": "gaps",
+          "statement": "区分伪数据、quenched 与非物理质量单ensemble结果，以及大 b 超出可靠窗口的限制。",
+          "references": [
+            {
+              "paper": "ratio",
+              "page": 3,
+              "anchor": "pseudo-data"
+            },
+            {
+              "paper": "dynamical",
+              "page": 17,
+              "anchor": "0.8 ≲b ≲ 2.5GeV"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "annotation_notes": [
+    "v2: Q19 limitation references corrected to the two papers actually asked about; unrelated quenched-paper anchor removed. Questions and model inputs unchanged. Gold pages are non-exhaustive diagnostic labels, not the only legitimate supporting locations."
+  ]
+}

@@ -94,6 +94,28 @@ Literature validation on 2026-10-26 used the same Ollama model to search arXiv a
 
 Streaming/retrieval validation on 2026-10-26: **74 Python tests and 9 Node UI tests passed**. The same Ollama configuration performed project-wide keyword retrieval, original-page reads and checked citations. One bounded live follow-up produced 118 text delta events (first text at 2.605 seconds, completion at 2.914 seconds); this is a single smoke measurement, not a latency benchmark. Browser checks verified server-side stop, incomplete-state restoration, and successful follow-up after stopping. Source/evidence records survived service restarts without creating new evidence or promoting claims. Synthetic corpus tests validate retrieval/provenance mechanics; real-paper scientific accuracy, formula interpretation and completeness still require expert review. No package or Release was published.
 
+### Evaluate Discuss with real papers
+
+The [20-question source-pinned suite](evals/discuss_real_papers.json) uses three public CS-kernel papers and separate rubrics for source support and key limitations. The [2026-10-26 baseline](docs/evals/discuss-baseline-2026-10-26.md) records 20 completed Ollama trials: raw-question retrieval hit@8 was 14/20; labeled-page reading coverage was 88%; source audit marked 13 answers supported and 7 needing work. All mentioned the requested limitations, but most questions explicitly asked about them. These are single-run diagnostics with an agent source audit, not independent expert certification or a general physics accuracy score. The suite now has 82 Python tests and 9 Node UI tests, including evaluator integrity and isolation checks.
+
+```bash
+python scripts/evaluate_discuss.py           # dry run: no downloads or model calls
+set -a
+source .env                                # existing private provider configuration
+set +a
+python scripts/evaluate_discuss.py --run     # calls the configured Discuss API
+```
+
+Each run uses a new `.local/evals/discuss_<timestamp>_<id>/research` database. It imports pinned PDFs through the existing archive path and clears only that sandbox's message history before each question. PDF/text hashes and source anchors must match. Gold rubrics are never sent to the answer model. The current research database, Codex credentials and application settings are untouched. Full answers, events, tool replay results, source archives and the generation-time suite/evaluator snapshots stay in the ignored run directory.
+
+Edit that run's `reviews.json` to record source-audit verdicts and explanations, then regenerate the report without new model calls:
+
+```bash
+python scripts/evaluate_discuss.py --report .local/evals/discuss_<timestamp>_<id>
+```
+
+Unreviewed answers remain unreviewed, even when retrieval and citation access pass. Judgments must cover extra claims, not just the requested core fact; source access and literal anchor exposure never substitute for semantic review. Recorded timeouts/API failures remain failed trials. The evaluator replaces the previous three-question qualitative model canary; no parallel model-scoring workflow or new runtime dependency was added. The existing application behavior and released Intel preview are unchanged.
+
 ### Source layout
 
 ```text
@@ -127,4 +149,4 @@ See [Architecture](docs/ARCHITECTURE.md), [Provider details](docs/PROVIDERS.md) 
 
 The bundled workbench is an integrated **working baseline**; the full scientific workflow (PDF-to-equation references, streamed Codex event approvals, production math editor, HPC dry-run adapters, etc.) is not already implemented. To develop those components in one coherent project, give Codex [`docs/CODEX_COMPLETE_BUILD_PROMPT.md`](docs/CODEX_COMPLETE_BUILD_PROMPT.md) in the cloned repository. The prompt requires implementation and executable tests, not another architecture slide deck.
 
-For controlled model upgrades, use `python scripts/evaluate_models.py` for a no-cost dry run, then `python scripts/evaluate_models.py --models gpt-sol deepseek-pro --run` after setting keys. Review the saved outputs rather than blindly scoring them as correct physics.
+For controlled Discuss changes, compare the frozen real-paper baseline with a fresh run and inspect the source audit. Add neutral, independently reviewed holdout questions before tuning repeatedly on these 20 development cases.

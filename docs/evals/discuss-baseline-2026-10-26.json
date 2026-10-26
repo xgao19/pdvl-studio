@@ -1,0 +1,1689 @@
+{
+  "manifest": {
+    "created_at": "2026-10-26T19:45:13+00:00",
+    "source_commit": "41c6fc0569c6a07b364820a439aea88e4cb2a71b",
+    "harness_sha256": {
+      "pdvl/__init__.py": "9272f8341229bbc0614fd3f6b4ed5a14c98a31b4852c163a91d7d259036435c2",
+      "pdvl/api.py": "05120a0357cfd415ff8853dcbffd560b50250fb04e00c9752d6a10049930d1db",
+      "pdvl/cli.py": "e9732cce13909da7488510534e1c03f12198e5908431ac51af9a5868b4f020bb",
+      "pdvl/config.py": "72e5122f47f6e9f3b6f2cd0044e0d8d47cae8a91060b42c23995b7d91a376021",
+      "pdvl/db.py": "d4c4fa5f487677d41a5b39f979fcd06e82853d056e3c9ecb6500de74a90b2c85",
+      "pdvl/desktop.py": "ca656d10f6bf21d25a75501689cf7f58243c89f917b1251d6266a833907c30c8",
+      "pdvl/mcp_server.py": "09bad3e0776ed5fcb004d8c9aeaf9cb13924c1f7a9aa63738152a32df5d2aa0a",
+      "pdvl/papers.py": "14f99ff38e30751ede11f736ae596b511cb4b5dab88ea962befa88d024869261",
+      "pdvl/prompts.py": "db996d6bc3ba104a0653c44008aa7648cf0a724f860254f9b9e9f58c21a89c05",
+      "pdvl/providers.py": "a607c8cef90938dc895fcb12f298450b42a5de68afdccb7acfde9ba41414b41f",
+      "pdvl/research.py": "fccb68647c912c0cc84ff138b716844f4affd71602b3e917aba7e7fb327299d2",
+      "pdvl/tools.py": "00a98d507d3cc14fd875d482227baaa098ab6f46f087bdc5da404c2ce78bf4b1",
+      "pdvl/verification.py": "cc018ea3548099f6152399e5ac5515545023dde778a8ba10d1be5e6411561a4d",
+      "pdvl/worker.py": "2a1f6e81597e4f097d6891a80d0b04e97ecbca593ef1c87b751c491c9a67ab23",
+      "scripts/evaluate_discuss.py": "be10c4b2a78414bba1395ae19411fade2bc0062c8f94b4edc151674e30cfb10d",
+      "evals/discuss_real_papers.json": "8a8df270b3103a17194ff1f8bfc5c2b8b0b103e9e9bc001d7a9ba0cae2d183a3"
+    },
+    "suite_sha256": "c69fed1e0d5c816c709177f0b6d7ecc78039dfebf7bb93529434a68a5bf850bf",
+    "model": {
+      "id": "ollama-deepseek-flash",
+      "provider": "custom",
+      "model": "deepseek-v4.1-flash:1017",
+      "api": "chat_completions"
+    },
+    "sources": [
+      {
+        "id": "ratio",
+        "arxiv_id": "2206.01105v1",
+        "title": "Determination of Collins-Soper kernel from cross-sections ratios",
+        "url": "https://arxiv.org/abs/2206.01105v1",
+        "pdf_sha256": "cf1537ac9148ad4af7479b88852d2b2a2ad0308d45d033fa98704d0866d996f9",
+        "pages_sha256": "a6f28e84c9dd62029a48a9d18bd194e3ace2321f435160af5a5a8ae4156b24ae",
+        "page_count": 5
+      },
+      {
+        "id": "quenched",
+        "arxiv_id": "2003.06063v2",
+        "title": "Collins-Soper Kernel for TMD Evolution from Lattice QCD",
+        "url": "https://arxiv.org/abs/2003.06063v2",
+        "pdf_sha256": "0fb2ee000b1e1304e5b82643061740c39c06e021e53de536236a64d2f9ebb0a5",
+        "pages_sha256": "5aea8be52465a82097c86224054d6aaf1f9b59c0a225a25ec4ba4aea485560d3",
+        "page_count": 22
+      },
+      {
+        "id": "dynamical",
+        "arxiv_id": "2103.16991v3",
+        "title": "Determination of the Collins-Soper Kernel from Lattice QCD",
+        "url": "https://arxiv.org/abs/2103.16991v3",
+        "pdf_sha256": "d82a13954dc32ac04fd71161fd6de56bb13e40d94813418b0a3bc63a302c7564",
+        "pages_sha256": "a9c166348d61758cdf927783eeeea242638dd46c4ad8e4c195327b19889b420d",
+        "page_count": 23
+      }
+    ],
+    "scope": "One trial per question; same configured Discuss API and tools; cold conversation; no gold labels in model input.",
+    "generation_suite_sha256": "8a8df270b3103a17194ff1f8bfc5c2b8b0b103e9e9bc001d7a9ba0cae2d183a3",
+    "annotation_audit": {
+      "model_answers_rerun": false,
+      "questions_unchanged": true,
+      "reason": "v2: Q19 limitation references corrected to the two papers actually asked about; unrelated quenched-paper anchor removed. Questions and model inputs unchanged. Gold pages are non-exhaustive diagnostic labels, not the only legitimate supporting locations."
+    }
+  },
+  "reviewer": "Codex source audit against archived PDFs and observed reading traces",
+  "review_type": "agent_source_audit",
+  "independent_expert_review": false,
+  "n": 20,
+  "completed": 20,
+  "raw_hit_at_8": 0.7,
+  "raw_page_recall_at_8": 0.5766666666666667,
+  "tool_page_recall": 0.6,
+  "tool_search_cases": 14,
+  "tool_page_recall_when_searched": 0.8571428571428571,
+  "read_page_recall": 0.8800000000000001,
+  "citation_valid": 73,
+  "citation_total": 74,
+  "cases_with_citations": 18,
+  "support_counts": {
+    "needs_work": 7,
+    "pass": 13
+  },
+  "limitation_counts": {
+    "pass": 20
+  },
+  "cases": [
+    {
+      "id": "Q01",
+      "question": "2206.01105v1 的 CASCADE 方法演示使用什么数据和参数输入？这是否等于完成真实实验数据提取？",
+      "category": "single_zh",
+      "state": "completed",
+      "elapsed_seconds": 7.974,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [
+            [
+              "ratio",
+              3
+            ],
+            [
+              "ratio",
+              4
+            ]
+          ],
+          "expected_count": 2,
+          "hit": true,
+          "recall": 1.0
+        },
+        "tool_search_union": {
+          "matched": [],
+          "expected_count": 2,
+          "hit": false,
+          "recall": 0.0,
+          "called": false
+        },
+        "read_pages": {
+          "matched": [
+            [
+              "ratio",
+              3
+            ],
+            [
+              "ratio",
+              4
+            ]
+          ],
+          "expected_count": 2,
+          "hit": true,
+          "recall": 1.0
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "data",
+            "exposed": true
+          },
+          {
+            "kind": "limitations",
+            "id": "scope",
+            "exposed": true
+          }
+        ],
+        "citations": {
+          "valid": 3,
+          "total": 3
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q01",
+        "facts": [
+          {
+            "id": "data",
+            "verdict": "partial",
+            "note": "主干的 CASCADE 伪数据与 HERA 输入有原文支撑，但额外给出的 δy=2–6 与 PDF 第2页表 I 不符（应包含2、3、4、5，未有6）；p.1,p.4 标签只链接到p.1。不能因主干答对就忽略附加错误。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "scope",
+            "verdict": "present",
+            "note": "正确区分方法演示与已完成真实数据提取；统计/系统误差措辞混淆列入支撑问题。"
+          }
+        ]
+      },
+      "support": false,
+      "limitations": true
+    },
+    {
+      "id": "Q02",
+      "question": "In 2206.01105v1, what data and parameter inputs drive the CASCADE demonstration? Is it an extraction from real experimental data?",
+      "category": "paired_en",
+      "state": "completed",
+      "elapsed_seconds": 8.212,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [
+            [
+              "ratio",
+              3
+            ],
+            [
+              "ratio",
+              4
+            ]
+          ],
+          "expected_count": 2,
+          "hit": true,
+          "recall": 1.0
+        },
+        "tool_search_union": {
+          "matched": [
+            [
+              "ratio",
+              3
+            ],
+            [
+              "ratio",
+              4
+            ]
+          ],
+          "expected_count": 2,
+          "hit": true,
+          "recall": 1.0,
+          "called": true
+        },
+        "read_pages": {
+          "matched": [
+            [
+              "ratio",
+              3
+            ],
+            [
+              "ratio",
+              4
+            ]
+          ],
+          "expected_count": 2,
+          "hit": true,
+          "recall": 1.0
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "data",
+            "exposed": true
+          },
+          {
+            "kind": "limitations",
+            "id": "scope",
+            "exposed": true
+          }
+        ],
+        "citations": {
+          "valid": 3,
+          "total": 3
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q02",
+        "facts": [
+          {
+            "id": "data",
+            "verdict": "supported",
+            "note": "输入与伪数据性质可在已读 PDF 第2–4页核对；没有把既有 DY 描述能力误称为本文的实测输入。英文问题得到中文回答，不影响本次事实评分。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "scope",
+            "verdict": "present",
+            "note": "明确本文未完成真实数据提取，实际数据应用属于后续工作。"
+          }
+        ]
+      },
+      "support": true,
+      "limitations": true
+    },
+    {
+      "id": "Q03",
+      "question": "2206.01105v1 中怎样选 s、Q、y 才能在截面比中消掉 TMD？积分分箱的 δQ 与 δy 有什么限制？",
+      "category": "kinematics",
+      "state": "completed",
+      "elapsed_seconds": 4.5,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [
+            [
+              "ratio",
+              2
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0
+        },
+        "tool_search_union": {
+          "matched": [],
+          "expected_count": 1,
+          "hit": false,
+          "recall": 0.0,
+          "called": false
+        },
+        "read_pages": {
+          "matched": [
+            [
+              "ratio",
+              2
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "matching",
+            "exposed": true
+          },
+          {
+            "kind": "limitations",
+            "id": "bins",
+            "exposed": true
+          }
+        ],
+        "citations": {
+          "valid": 2,
+          "total": 2
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q03",
+        "facts": [
+          {
+            "id": "matching",
+            "verdict": "supported",
+            "note": "同 y、同 b、s1/s2=Q1²/Q2² 及 x1,x2 相同均对应第1–2页方程与说明；分箱条件对应第2页。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "bins",
+            "verdict": "present",
+            "note": "保留 δQ≪Q、两组 δy 相同以及因子化适用范围，未声称任意截面相消。"
+          }
+        ]
+      },
+      "support": true,
+      "limitations": true
+    },
+    {
+      "id": "Q04",
+      "question": "2206.01105v1 的离散 Hankel 变换为何不能无条件延伸到任意大 b？说明 qT 分箱、稳定区间与误差估计。",
+      "category": "numerics",
+      "state": "completed",
+      "elapsed_seconds": 7.09,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [
+            [
+              "ratio",
+              3
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0
+        },
+        "tool_search_union": {
+          "matched": [],
+          "expected_count": 1,
+          "hit": false,
+          "recall": 0.0,
+          "called": false
+        },
+        "read_pages": {
+          "matched": [
+            [
+              "ratio",
+              3
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "bins",
+            "exposed": true
+          },
+          {
+            "kind": "limitations",
+            "id": "instability",
+            "exposed": true
+          }
+        ],
+        "citations": {
+          "valid": 2,
+          "total": 2
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q04",
+        "facts": [
+          {
+            "id": "bins",
+            "verdict": "partial",
+            "note": "分箱0.05 GeV、可达4–5 GeV⁻¹及 bootstrap 有支撑；但把图2的4–6区间振荡标为p.3–4却仅链接p.3，该图及对应caption实际在p.4。事实大体正确，逐断言页码对应尚不足。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "instability",
+            "verdict": "present",
+            "note": "区分高 qT 截断很小与有限分箱仍不稳定，并指出大 b 的输入密度要求。"
+          }
+        ]
+      },
+      "support": false,
+      "limitations": true
+    },
+    {
+      "id": "Q05",
+      "question": "2206.01105v1 的大 b 线性渐近结果属于什么对象？能否据此断言真实 QCD 核的精确普适渐近形式？",
+      "category": "overclaim",
+      "state": "completed",
+      "elapsed_seconds": 11.067,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [],
+          "expected_count": 2,
+          "hit": false,
+          "recall": 0.0
+        },
+        "tool_search_union": {
+          "matched": [
+            [
+              "ratio",
+              4
+            ]
+          ],
+          "expected_count": 2,
+          "hit": true,
+          "recall": 0.5,
+          "called": true
+        },
+        "read_pages": {
+          "matched": [
+            [
+              "ratio",
+              3
+            ],
+            [
+              "ratio",
+              4
+            ]
+          ],
+          "expected_count": 2,
+          "hit": true,
+          "recall": 1.0
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "asymptotic",
+            "exposed": true
+          },
+          {
+            "kind": "limitations",
+            "id": "scope",
+            "exposed": true
+          }
+        ],
+        "citations": {
+          "valid": 5,
+          "total": 5
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q05",
+        "facts": [
+          {
+            "id": "asymptotic",
+            "verdict": "supported",
+            "note": "CASCADE 的线性拟合及范围限制与第3–4页一致；补充两篇格点结果的限定比较可在实际读取的页中核对。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "scope",
+            "verdict": "present",
+            "note": "明确这是生成器模型所隐含行为的有限范围拟合，不是真实 QCD 精确渐近定理。"
+          }
+        ]
+      },
+      "support": true,
+      "limitations": true
+    },
+    {
+      "id": "Q06",
+      "question": "2206.01105v1 的 Drell–Yan 方法对 qT/Q、Q 与强作用尺度、Z 玻色子有什么适用条件？约 1% 修正对应哪里？",
+      "category": "validity",
+      "state": "completed",
+      "elapsed_seconds": 5.98,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [
+            [
+              "ratio",
+              2
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0
+        },
+        "tool_search_union": {
+          "matched": [],
+          "expected_count": 1,
+          "hit": false,
+          "recall": 0.0,
+          "called": false
+        },
+        "read_pages": {
+          "matched": [
+            [
+              "ratio",
+              2
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "power",
+            "exposed": true
+          },
+          {
+            "kind": "limitations",
+            "id": "window",
+            "exposed": true
+          }
+        ],
+        "citations": {
+          "valid": 1,
+          "total": 1
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q06",
+        "facts": [
+          {
+            "id": "power",
+            "verdict": "partial",
+            "note": "适用尺度和约1%的位置正确；最后把该估计归因为 CASCADE 演示不准确。第2页该处引用的是已有因子化分析，不能把论文中所有数值都归到伪数据实验。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "window",
+            "verdict": "present",
+            "note": "保留 Q≫Λ、Q≪MZ、需纳入 Z 修正，以及1%并非严格误差上界的限定。"
+          }
+        ]
+      },
+      "support": false,
+      "limitations": true
+    },
+    {
+      "id": "Q07",
+      "question": "2003.06063v2 用什么海夸克设置、外态及 pion 质量？态无关性是否意味着所有有限动量误差也无关？",
+      "category": "setup",
+      "state": "completed",
+      "elapsed_seconds": 5.176,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [
+            [
+              "quenched",
+              4
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0
+        },
+        "tool_search_union": {
+          "matched": [
+            [
+              "quenched",
+              4
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0,
+          "called": true
+        },
+        "read_pages": {
+          "matched": [
+            [
+              "quenched",
+              4
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "ensemble",
+            "exposed": true
+          },
+          {
+            "kind": "limitations",
+            "id": "state",
+            "exposed": true
+          }
+        ],
+        "citations": {
+          "valid": 2,
+          "total": 2
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q07",
+        "facts": [
+          {
+            "id": "ensemble",
+            "verdict": "supported",
+            "note": "quenched、重 pion 质量和外态的说明对应第4页，有限动量及外态依赖的修正也有直接原文。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "state",
+            "verdict": "present",
+            "note": "明确核的态无关不等于其幂修正态无关，也未称为含海夸克物理点结果。"
+          }
+        ]
+      },
+      "support": true,
+      "limitations": true
+    },
+    {
+      "id": "Q08",
+      "question": "2003.06063v2 的准 beam function 中，Dirac 结构混合贡献有多大？能否只算 γ4 就保证更高精度？",
+      "category": "renormalization",
+      "state": "completed",
+      "elapsed_seconds": 7.592,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [
+            [
+              "quenched",
+              6
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0
+        },
+        "tool_search_union": {
+          "matched": [
+            [
+              "quenched",
+              6
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0,
+          "called": true
+        },
+        "read_pages": {
+          "matched": [
+            [
+              "quenched",
+              6
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "mixing",
+            "exposed": true
+          },
+          {
+            "kind": "limitations",
+            "id": "precision",
+            "exposed": true
+          }
+        ],
+        "citations": {
+          "valid": 3,
+          "total": 3
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q08",
+        "facts": [
+          {
+            "id": "mixing",
+            "verdict": "supported",
+            "note": "5%–25%和多个 Dirac 结构的精度要求均对应第6页；额外的统计设置可在第4页核对。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "precision",
+            "verdict": "present",
+            "note": "将该幅度限定为所研究参数下的准 beam function 混合贡献，未当作通用最终核误差。"
+          }
+        ]
+      },
+      "support": true,
+      "limitations": true
+    },
+    {
+      "id": "Q09",
+      "question": "Why does 2003.06063v2 model the longitudinal quasi beam function before Fourier transformation? Is its final kernel model independent?",
+      "category": "fourier",
+      "state": "completed",
+      "elapsed_seconds": 5.758,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [
+            [
+              "quenched",
+              6
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0
+        },
+        "tool_search_union": {
+          "matched": [
+            [
+              "quenched",
+              6
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0,
+          "called": true
+        },
+        "read_pages": {
+          "matched": [
+            [
+              "quenched",
+              6
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "truncation",
+            "exposed": true
+          },
+          {
+            "kind": "limitations",
+            "id": "dependence",
+            "exposed": true
+          }
+        ],
+        "citations": {
+          "valid": 0,
+          "total": 0
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q09",
+        "facts": [
+          {
+            "id": "truncation",
+            "verdict": "partial",
+            "note": "截断、两类模型及非模型无关结论有支撑；“高阶匹配会破坏x无关性而被忽略”把原文需要更复杂拟合形式补偿x依赖的说明简化过度，易与物理核的x无关性混淆。另有裸页码而无可点击出处。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "dependence",
+            "verdict": "present",
+            "note": "保留模型依赖及更大体积/更大 Pz*bzmax 的需要，没有称两模型一致就消除了系统误差。"
+          }
+        ]
+      },
+      "support": false,
+      "limitations": true
+    },
+    {
+      "id": "Q10",
+      "question": "2003.06063v2 的最终模型分析采用怎样的微扰匹配阶次？能否说已严格控制所有高阶匹配和幂修正？",
+      "category": "matching",
+      "state": "completed",
+      "elapsed_seconds": 13.627,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [],
+          "expected_count": 2,
+          "hit": false,
+          "recall": 0.0
+        },
+        "tool_search_union": {
+          "matched": [
+            [
+              "quenched",
+              6
+            ]
+          ],
+          "expected_count": 2,
+          "hit": true,
+          "recall": 0.5,
+          "called": true
+        },
+        "read_pages": {
+          "matched": [
+            [
+              "quenched",
+              6
+            ],
+            [
+              "quenched",
+              11
+            ]
+          ],
+          "expected_count": 2,
+          "hit": true,
+          "recall": 1.0
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "order",
+            "exposed": true
+          },
+          {
+            "kind": "limitations",
+            "id": "uncertainty",
+            "exposed": true
+          }
+        ],
+        "citations": {
+          "valid": 5,
+          "total": 5
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q10",
+        "facts": [
+          {
+            "id": "order",
+            "verdict": "supported",
+            "note": "LO=1、忽略高阶匹配和未约束幂修正均可在已读第6、8–11页核对。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "uncertainty",
+            "verdict": "present",
+            "note": "明确探索性而非完全受控；区分预期较小与已给出误差上限。"
+          }
+        ]
+      },
+      "support": true,
+      "limitations": true
+    },
+    {
+      "id": "Q11",
+      "question": "2003.06063v2 认为未来实现受控、模型无关 CS 核需要哪些改进？只增加统计量够吗？",
+      "category": "future_control",
+      "state": "completed",
+      "elapsed_seconds": 15.936,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [],
+          "expected_count": 2,
+          "hit": false,
+          "recall": 0.0
+        },
+        "tool_search_union": {
+          "matched": [],
+          "expected_count": 2,
+          "hit": false,
+          "recall": 0.0,
+          "called": false
+        },
+        "read_pages": {
+          "matched": [
+            [
+              "quenched",
+              10
+            ],
+            [
+              "quenched",
+              11
+            ]
+          ],
+          "expected_count": 2,
+          "hit": true,
+          "recall": 1.0
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "improvements",
+            "exposed": true
+          },
+          {
+            "kind": "limitations",
+            "id": "limits",
+            "exposed": true
+          }
+        ],
+        "citations": {
+          "valid": 3,
+          "total": 3
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q11",
+        "facts": [
+          {
+            "id": "improvements",
+            "verdict": "supported",
+            "note": "更大体积、纵向范围和动量的建议及示例截断估计来自第10–11页；对独立极限的要求有原文支撑。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "limits",
+            "verdict": "present",
+            "note": "明确只增加统计量不足，仍需连续极限、无限体积及幂修正控制。"
+          }
+        ]
+      },
+      "support": true,
+      "limitations": true
+    },
+    {
+      "id": "Q12",
+      "question": "2103.16991v3 的 H101 是 quenched 还是 dynamical？给出 Nf、格距与质量，并说明是否已外推到物理点。",
+      "category": "setup",
+      "state": "completed",
+      "elapsed_seconds": 7.55,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [
+            [
+              "dynamical",
+              1
+            ]
+          ],
+          "expected_count": 2,
+          "hit": true,
+          "recall": 0.5
+        },
+        "tool_search_union": {
+          "matched": [
+            [
+              "dynamical",
+              1
+            ],
+            [
+              "dynamical",
+              3
+            ]
+          ],
+          "expected_count": 2,
+          "hit": true,
+          "recall": 1.0,
+          "called": true
+        },
+        "read_pages": {
+          "matched": [
+            [
+              "dynamical",
+              1
+            ],
+            [
+              "dynamical",
+              3
+            ]
+          ],
+          "expected_count": 2,
+          "hit": true,
+          "recall": 1.0
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "ensemble",
+            "exposed": true
+          },
+          {
+            "kind": "limitations",
+            "id": "physical",
+            "exposed": true
+          }
+        ],
+        "citations": {
+          "valid": 4,
+          "total": 5
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q12",
+        "facts": [
+          {
+            "id": "ensemble",
+            "verdict": "supported",
+            "note": "H101 的动力学设置、格距、质量与单ensemble范围正确。额外引用 quenched 论文p.1未实际读取，已被系统拦截；此机械问题独立记录，不应把事实正确和访问校验混为一谈。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "physical",
+            "verdict": "present",
+            "note": "明确非物理质量、单一格距/体积与尚未外推物理点。"
+          }
+        ]
+      },
+      "support": true,
+      "limitations": true
+    },
+    {
+      "id": "Q13",
+      "question": "2103.16991v3 为什么研究第一 Mellin 矩、只用 ℓ=0 比值？是否因此完全去掉了 x 依赖的模型假设？",
+      "category": "method",
+      "state": "completed",
+      "elapsed_seconds": 13.983,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [],
+          "expected_count": 1,
+          "hit": false,
+          "recall": 0.0
+        },
+        "tool_search_union": {
+          "matched": [
+            [
+              "dynamical",
+              3
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0,
+          "called": true
+        },
+        "read_pages": {
+          "matched": [],
+          "expected_count": 1,
+          "hit": false,
+          "recall": 0.0
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "moment",
+            "exposed": false
+          },
+          {
+            "kind": "limitations",
+            "id": "assumption",
+            "exposed": false
+          }
+        ],
+        "citations": {
+          "valid": 6,
+          "total": 6
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q13",
+        "facts": [
+          {
+            "id": "moment",
+            "verdict": "supported",
+            "note": "实际读取的是第4–9页及另一篇第10–11页，而非预标注引言p.3；ℓ=0、积分矩及 M/r 的模型假设在这些正文页有等价支持。标注页访问为0不能直接判语义错误。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "assumption",
+            "verdict": "present",
+            "note": "明确 x 依赖被压缩进积分组合与常数假设，而非被消除。"
+          }
+        ]
+      },
+      "support": true,
+      "limitations": true
+    },
+    {
+      "id": "Q14",
+      "question": "2103.16991v3 怎样处理 M(b) 与归一化？由它得到的 δK 是否等于全部系统误差？",
+      "category": "correlated_error",
+      "state": "completed",
+      "elapsed_seconds": 12.699,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [
+            [
+              "dynamical",
+              9
+            ]
+          ],
+          "expected_count": 2,
+          "hit": true,
+          "recall": 0.5
+        },
+        "tool_search_union": {
+          "matched": [
+            [
+              "dynamical",
+              9
+            ]
+          ],
+          "expected_count": 2,
+          "hit": true,
+          "recall": 0.5,
+          "called": true
+        },
+        "read_pages": {
+          "matched": [
+            [
+              "dynamical",
+              9
+            ]
+          ],
+          "expected_count": 2,
+          "hit": true,
+          "recall": 0.5
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "normalization",
+            "exposed": true
+          },
+          {
+            "kind": "limitations",
+            "id": "incomplete",
+            "exposed": false
+          }
+        ],
+        "citations": {
+          "valid": 4,
+          "total": 4
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q14",
+        "facts": [
+          {
+            "id": "normalization",
+            "verdict": "partial",
+            "note": "常数假设与关联系统误差基本正确，但把第2.3节的理论归一化与第4.1节在1.20/1.28处拟合 M 写成“另一条路线”，混淆同一方法的理论描述和数值实现。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "incomplete",
+            "verdict": "present",
+            "note": "明确 δK 不是全部系统误差，列出未受控的格点伪影、有限 staple 及幂修正。"
+          }
+        ]
+      },
+      "support": false,
+      "limitations": true
+    },
+    {
+      "id": "Q15",
+      "question": "2103.16991v3 认为提取可靠的 b 范围是多少？为什么小 b 和大 b 两端不能直接信任？",
+      "category": "range",
+      "state": "completed",
+      "elapsed_seconds": 6.912,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [],
+          "expected_count": 1,
+          "hit": false,
+          "recall": 0.0
+        },
+        "tool_search_union": {
+          "matched": [
+            [
+              "dynamical",
+              17
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0,
+          "called": true
+        },
+        "read_pages": {
+          "matched": [
+            [
+              "dynamical",
+              17
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "range",
+            "exposed": true
+          },
+          {
+            "kind": "limitations",
+            "id": "ends",
+            "exposed": true
+          }
+        ],
+        "citations": {
+          "valid": 0,
+          "total": 0
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q15",
+        "facts": [
+          {
+            "id": "range",
+            "verdict": "supported",
+            "note": "可靠窗口与两端失效原因可在第17–20页核对；没有附可点击页码链接，单独记为引用呈现缺口，不自动判事实错误。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "ends",
+            "verdict": "present",
+            "note": "将窗口限定为该ensemble、动量与方法，并保留常数假设及未完全控制的系统误差。"
+          }
+        ]
+      },
+      "support": true,
+      "limitations": true
+    },
+    {
+      "id": "Q16",
+      "question": "2103.16991v3 的 Sivers 情形为何不能直接沿用无偏振通道的稳定假设？哪些实际提取通道最终被排除？",
+      "category": "channels",
+      "state": "completed",
+      "elapsed_seconds": 11.729,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [
+            [
+              "dynamical",
+              8
+            ]
+          ],
+          "expected_count": 3,
+          "hit": true,
+          "recall": 0.3333333333333333
+        },
+        "tool_search_union": {
+          "matched": [
+            [
+              "dynamical",
+              8
+            ],
+            [
+              "dynamical",
+              17
+            ],
+            [
+              "dynamical",
+              20
+            ]
+          ],
+          "expected_count": 3,
+          "hit": true,
+          "recall": 1.0,
+          "called": true
+        },
+        "read_pages": {
+          "matched": [
+            [
+              "dynamical",
+              8
+            ],
+            [
+              "dynamical",
+              17
+            ],
+            [
+              "dynamical",
+              20
+            ]
+          ],
+          "expected_count": 3,
+          "hit": true,
+          "recall": 1.0
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "sivers",
+            "exposed": true
+          },
+          {
+            "kind": "limitations",
+            "id": "cause",
+            "exposed": true
+          }
+        ],
+        "citations": {
+          "valid": 4,
+          "total": 4
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q16",
+        "facts": [
+          {
+            "id": "sivers",
+            "verdict": "supported",
+            "note": "非正定导致比值奇异与实际三个被排除通道均有正文支撑；实际排除的格点伪影解释也已读到。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "cause",
+            "verdict": "present",
+            "note": "区分 Sivers 的积分风险与格点分析中的排除原因，未说所有通道均受控。"
+          }
+        ]
+      },
+      "support": true,
+      "limitations": true
+    },
+    {
+      "id": "Q17",
+      "question": "2103.16991v3 的约 30%–40% 幂修正估计来自什么比较？它是否就是最终 CS 核的总相对误差？",
+      "category": "power_corrections",
+      "state": "completed",
+      "elapsed_seconds": 6.933,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [
+            [
+              "dynamical",
+              17
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0
+        },
+        "tool_search_union": {
+          "matched": [
+            [
+              "dynamical",
+              17
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0,
+          "called": true
+        },
+        "read_pages": {
+          "matched": [
+            [
+              "dynamical",
+              17
+            ]
+          ],
+          "expected_count": 1,
+          "hit": true,
+          "recall": 1.0
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "estimate",
+            "exposed": true
+          },
+          {
+            "kind": "limitations",
+            "id": "interpretation",
+            "exposed": true
+          }
+        ],
+        "citations": {
+          "valid": 3,
+          "total": 3
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q17",
+        "facts": [
+          {
+            "id": "estimate",
+            "verdict": "supported",
+            "note": "bad/good 比值、对应动量、b值和约40%/30%的说明与第17页一致。把结论页口误称摘要页是位置称呼问题，实际链接页存在且已读。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "interpretation",
+            "verdict": "present",
+            "note": "明确不是核的总相对误差，并保留比值部分相消、M拟合及其他系统误差。"
+          }
+        ]
+      },
+      "support": true,
+      "limitations": true
+    },
+    {
+      "id": "Q18",
+      "question": "比较 2206.01105v1、2003.06063v2 和 2103.16991v3：各自数据来源和主要方法障碍是什么？结果接近是否证明物理 QCD 普适性？",
+      "category": "comparison",
+      "state": "completed",
+      "elapsed_seconds": 24.908,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [
+            [
+              "dynamical",
+              1
+            ]
+          ],
+          "expected_count": 5,
+          "hit": true,
+          "recall": 0.2
+        },
+        "tool_search_union": {
+          "matched": [],
+          "expected_count": 5,
+          "hit": false,
+          "recall": 0.0,
+          "called": false
+        },
+        "read_pages": {
+          "matched": [
+            [
+              "dynamical",
+              1
+            ],
+            [
+              "quenched",
+              4
+            ],
+            [
+              "ratio",
+              3
+            ]
+          ],
+          "expected_count": 5,
+          "hit": true,
+          "recall": 0.6
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "sources",
+            "exposed": true
+          },
+          {
+            "kind": "limitations",
+            "id": "comparison",
+            "exposed": false
+          }
+        ],
+        "citations": {
+          "valid": 11,
+          "total": 11
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q18",
+        "facts": [
+          {
+            "id": "sources",
+            "verdict": "partial",
+            "note": "三种数据来源主干正确，但把第2页表格粘连成 Q=12–516 GeV；原表相关 Q 为12、16、20、24 GeV，516不是质量点。原文链接有效未防住数值误读。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "comparison",
+            "verdict": "present",
+            "note": "保留伪数据、quenched与动力学非物理质量的区别、建模/常数假设和受限 b 窗口，未宣称完成普适性证明。"
+          }
+        ]
+      },
+      "support": false,
+      "limitations": true
+    },
+    {
+      "id": "Q19",
+      "question": "对照 2206.01105v1 式(3) 与 2103.16991v3 式(2.12)：若使用同一个 ζ 导数，D 与 K 是否只差负号？叠图还需核对什么？",
+      "category": "conventions",
+      "state": "completed",
+      "elapsed_seconds": 37.057,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [
+            [
+              "dynamical",
+              6
+            ],
+            [
+              "ratio",
+              2
+            ]
+          ],
+          "expected_count": 2,
+          "hit": true,
+          "recall": 1.0
+        },
+        "tool_search_union": {
+          "matched": [
+            [
+              "dynamical",
+              6
+            ],
+            [
+              "ratio",
+              2
+            ]
+          ],
+          "expected_count": 2,
+          "hit": true,
+          "recall": 1.0,
+          "called": true
+        },
+        "read_pages": {
+          "matched": [
+            [
+              "dynamical",
+              6
+            ],
+            [
+              "ratio",
+              2
+            ]
+          ],
+          "expected_count": 2,
+          "hit": true,
+          "recall": 1.0
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "factor",
+            "exposed": true
+          },
+          {
+            "kind": "limitations",
+            "id": "alignment",
+            "exposed": true
+          }
+        ],
+        "citations": {
+          "valid": 4,
+          "total": 4
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q19",
+        "facts": [
+          {
+            "id": "factor",
+            "verdict": "partial",
+            "note": "D=-K/2 的主要比较正确；但额外把式(2.24)写成 K=ln R/ln(P1/P2)，遗漏 ln r。真正的核提取并非这一简式，尤其同文正在讨论匹配项。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "alignment",
+            "verdict": "present",
+            "note": "明确需核对原始方程、ζ和共同μ、有限b窗口与关联误差，没有直接只翻符号叠图。单位检查仍可更显式，后续用更细判据复核。"
+          }
+        ]
+      },
+      "support": false,
+      "limitations": true
+    },
+    {
+      "id": "Q20",
+      "question": "这三篇是否提供了同一物理点、连续极限下 CS 核在 b=5 GeV⁻¹ 的联合 95% 置信区间？若没有，说明缺口，不要编造数值。",
+      "category": "unanswerable",
+      "state": "completed",
+      "elapsed_seconds": 22.638,
+      "metrics": {
+        "raw_question_top8": {
+          "matched": [],
+          "expected_count": 4,
+          "hit": false,
+          "recall": 0.0
+        },
+        "tool_search_union": {
+          "matched": [
+            [
+              "dynamical",
+              3
+            ],
+            [
+              "dynamical",
+              17
+            ]
+          ],
+          "expected_count": 4,
+          "hit": true,
+          "recall": 0.5,
+          "called": true
+        },
+        "read_pages": {
+          "matched": [
+            [
+              "dynamical",
+              17
+            ],
+            [
+              "ratio",
+              3
+            ]
+          ],
+          "expected_count": 4,
+          "hit": true,
+          "recall": 0.5
+        },
+        "anchor_access": [
+          {
+            "kind": "facts",
+            "id": "abstain",
+            "exposed": false
+          },
+          {
+            "kind": "limitations",
+            "id": "gaps",
+            "exposed": true
+          }
+        ],
+        "citations": {
+          "valid": 8,
+          "total": 8
+        },
+        "external_search": false
+      },
+      "review": {
+        "id": "Q20",
+        "facts": [
+          {
+            "id": "abstain",
+            "verdict": "supported",
+            "note": "恰当拒绝编造共同物理点连续极限的联合95%区间；使用的版本和已读材料不提供所要求的联合结果。预标注部分页未读，但实际读页提供了等价限制依据。"
+          }
+        ],
+        "limitations": [
+          {
+            "id": "gaps",
+            "verdict": "present",
+            "note": "保留 quenched、非物理质量、伪数据、大b范围和缺少共同协方差等缺口。"
+          }
+        ]
+      },
+      "support": true,
+      "limitations": true
+    }
+  ]
+}
