@@ -6,7 +6,7 @@ One GitHub repository, one local web workspace, and independent research state. 
 
 ### At a glance
 
-- **Discuss:** natural theoretical-physics dialogue, arXiv search and archived-paper reading; select one paper for close reading or two for comparison.
+- **Discuss:** streamed theoretical-physics dialogue, live tool progress and stop control; arXiv search, project-wide full-text retrieval and archived-paper reading with source-access checks.
 - **Investigate:** deep reasoning chat plus optional sandboxed Codex SDK task runs.
 - **Verify:** narrow executable QFT checks and immutable evidence records; explicitly distinguishes a formal identity from physical observability.
 - **Write:** separate scientific-writing prompt, manuscript notebook and revision history and editable per-project **Scientific Voice**; prose does not simply rewrite Codex logs.
@@ -64,10 +64,18 @@ The implementation adds one artifact table and reuses the existing revision refe
 
 1. Open **文献精读与对照**. Search arXiv keywords and import a result, paste an arXiv ID/abs/pdf link, or upload a text-layer PDF.
 2. Select one paper and choose **精读这篇**, or select two and choose **对照这两篇**. Review the prepared question and send it in Discuss. The existing configured model, including Ollama, reads relevant original pages with tools.
-3. Inspect **原文读取记录** or click a page citation. Read by PDF page number, search keywords across the document, or continue a long page. Download the archived PDF to inspect equations and figures.
+3. Inspect **执行与原文读取记录** or click a checked page citation. Read by PDF page number, search keywords across the document, or continue a long page. Download the archived PDF to inspect equations and figures.
 4. Save a claim, expand **登记为文献证据** on its source paper, specify the page and interpretation, then record evidence. In Write, cite that evidence and save a revision through the existing workflow.
 
 Search results contain abstracts; importing preserves original PDF bytes and separately extracted page text with SHA-256 hashes. The reader reports partial scope and does not automatically verify claims. PDFs are limited to 8 MiB / 150 pages; scanned or encrypted files require preparation before import. No OCR, image interpretation or arbitrary publisher-URL fetching is implemented. The previously published Intel preview is unchanged; these features are currently validated from source.
+
+### Stream, stop and search the project library
+
+Discuss shows text as it arrives and reports actual searches, imports and page reads. **停止回答** cancels the server-side request and saves partial text as incomplete; reopening the conversation restores that state. Switching project or mode also stops the active chat. The same single chat path serves the other research modes.
+
+In the literature panel, **检索项目全文** searches all archived papers in this project. You can also ask Discuss to find relevant passages without selecting papers: it has the same `search_project_papers` tool. Results are ranked keyword excerpts; the model must read the original pages before citing. Use English terms for English papers. Semantic/cross-language retrieval is not implemented.
+
+On completion, page links are checked against project ownership, page bounds and actual recent read traces. Invalid links are disabled with an explanation. An existing evidence ID is checked against the project as well. A checked source is **not a guarantee that the answer is scientifically correct**; formula quality, interpretation and completeness still need review. During generation citations remain plain text until this check finishes. Neither retrieval nor chatting auto-registers evidence.
 
 ### Run tests
 
@@ -78,11 +86,13 @@ node --check web/app.js
 node --test tests/test_runs_ui.mjs
 ```
 
-Testing the actual Codex runtime and real provider responses requires authorized API credentials and runtime dependencies; unit and API tests use isolated temporary databases and mocked model responses.
+Testing the actual Codex runtime and real provider responses requires authorized API credentials and runtime dependencies; unit and API tests use isolated temporary databases and mocked model responses. Streaming cancellation tests bind temporary loopback ports; allow local socket access when running the suite in a sandbox. The fixed retrieval/citation corpus is `tests/fixtures/discuss_acceptance.json`, with no paid model calls.
 
-Local integration validation on 2026-10-26: Codex SDK/CLI 0.164.0 with Ollama Cloud `deepseek-v4.1-flash:1017` created files, ran SymPy and checked a cancellation identity (`0`) with a negative control (`epsilon`). A foreground heartbeat task was cancelled and stopped; the same session resumed in a restored workspace and reran the symbolic checks. Archived hashes and the evidence → manuscript citation chain were checked, while the claim remained `idea`. Normal Codex config/auth hashes were unchanged and its ChatGPT login remained active. A final real command verified credential variables were absent from the shell environment; shell snapshots are disabled, and the key scan matched only the ignored `.env`. This validates the local pair and bounded tasks, not every CLI tool or model capability. Private runs remain under `.local/`. The current offline suite has 61 Python tests and 6 Node UI tests.
+Local integration validation on 2026-10-26: Codex SDK/CLI 0.164.0 with Ollama Cloud `deepseek-v4.1-flash:1017` created files, ran SymPy and checked a cancellation identity (`0`) with a negative control (`epsilon`). A foreground heartbeat task was cancelled and stopped; the same session resumed in a restored workspace and reran the symbolic checks. Archived hashes and the evidence → manuscript citation chain were checked, while the claim remained `idea`. Normal Codex config/auth hashes were unchanged and its ChatGPT login remained active. A final real command verified credential variables were absent from the shell environment; shell snapshots are disabled, and the key scan matched only the ignored `.env`. This validates the local pair and bounded tasks, not every CLI tool or model capability. Private runs remain under `.local/`. The suite includes deterministic retrieval/citation fixtures and real loopback streaming tests, plus Node tests for the actual UI handlers.
 
 Literature validation on 2026-10-26 used the same Ollama model to search arXiv and read 2206.01105v1 (5 pages) and 2003.06063v2 (22 pages). Single-paper reading inspected PDF pages 1–3; comparison inspected both originals and continued a long page at offset 7000. Browser checks covered PDF upload/deduplication, page-link opening, evidence registration against PDF page 3, manuscript saving and source restoration after a service restart. Original PDF/text hashes were checked. The first search result exceeded the import limit and was explicitly rejected. Formula/figure interpretation still needs original-PDF review. No desktop package or release was updated.
+
+Streaming/retrieval validation on 2026-10-26: **74 Python tests and 9 Node UI tests passed**. The same Ollama configuration performed project-wide keyword retrieval, original-page reads and checked citations. One bounded live follow-up produced 118 text delta events (first text at 2.605 seconds, completion at 2.914 seconds); this is a single smoke measurement, not a latency benchmark. Browser checks verified server-side stop, incomplete-state restoration, and successful follow-up after stopping. Source/evidence records survived service restarts without creating new evidence or promoting claims. Synthetic corpus tests validate retrieval/provenance mechanics; real-paper scientific accuracy, formula interpretation and completeness still require expert review. No package or Release was published.
 
 ### Source layout
 

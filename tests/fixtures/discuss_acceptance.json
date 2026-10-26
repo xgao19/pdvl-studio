@@ -1,0 +1,15 @@
+{
+  "scope": "Deterministic synthetic literature fixtures; tests retrieval, source access and provenance, not physical truth or model reasoning quality.",
+  "papers": [
+    {"title": "Shared evolution", "pages": ["Abstract: comparison of two evolution kernels.", "Assumptions: both kernels share the same anomalous dimension. Their difference is scale independent under this condition.", "Method: CASCADE pseudodata are used. This is not an extraction from experimental measurements."]},
+    {"title": "Broken cancellation", "pages": ["Abstract: a controlled comparison.", "Negative control: an additional epsilon log(mu) term breaks cancellation. The scale derivative is epsilon, not zero."]},
+    {"title": "Finite resolution", "pages": ["Abstract: phenomenology at finite resolution.", "Finite binning retains nuisance functions. Scale independence alone does not guarantee experimental identifiability."]}
+  ],
+  "queries": [
+    {"question": "Where is the pseudodata limitation?", "query": "CASCADE pseudodata", "paper": 0, "page": 3, "contains": "not an extraction"},
+    {"question": "What assumptions permit cancellation?", "query": "anomalous dimension", "paper": 0, "page": 2, "contains": "under this condition"},
+    {"question": "Find the negative control", "query": "epsilon", "paper": 1, "page": 2, "contains": "not zero"},
+    {"question": "Does scale independence imply identifiability?", "query": "identifiability", "paper": 2, "page": 2, "contains": "does not guarantee"}
+  ],
+  "absent_query": "superconductingqubit"
+}

@@ -3,10 +3,11 @@ const $ = id => document.getElementById(id);
 let project = null, mode = "discuss", models = [], defaults = {}, lastAnswer = "";
 const modelSelections = {};
 let projectClaims = [], projectEvidence = [], activeProject = null;
-let projectPapers = [], sourceView = null;
+let projectPapers = [], sourceView = null, paperSearchEpoch = 0;
 const selectedPapers = new Set(), paperChecks = new Map();
 const runViews = new Map();
 let runEpoch = 0, runTimer = null, runRequest = null;
+let activeChat = null;
 const activeRun = r => ['queued','running','cancelling'].includes(r.state);
 const runLabels = {queued:'排队中',running:'执行中',cancelling:'正在取消',cancelled:'已取消',completed:'已完成',failed:'失败',interrupted:'已中断'};
 function stopRunPolling(){clearTimeout(runTimer);runEpoch++;runRequest=null}
@@ -26,10 +27,10 @@ const post=(path,body)=>api(path,{method:'POST',body:JSON.stringify(body)});
 function notify(text){$('alert').textContent=text;$('alert').classList.remove('hidden');setTimeout(()=>$('alert').classList.add('hidden'),8500)}
 function text(node,t){node.textContent=t;return node}
 function element(tag,cl){const x=document.createElement(tag);if(cl)x.className=cl;return x}
-function renderMarkdown(target,body){
+function renderMarkdown(target,body,meta={}){
  // Immediate safe fallback, then local-server-rendered and sanitized Markdown.
  const fallback=element('pre');fallback.textContent=body;target.appendChild(fallback);
- post('/render',{markdown:body}).then(data=>{target.innerHTML=data.html})
+ post('/render',{markdown:body,blocked_links:(meta.citations||[]).filter(c=>!c.valid).map(c=>c.target)}).then(data=>{target.innerHTML=data.html})
     .catch(()=>{});
 }
 async function init(){
@@ -61,11 +62,13 @@ function fillModels(){
 }
 function syncModelState(){const m=models.find(x=>x.id===$('model').value);$('modelState').textContent=m?.available?'Connected':'API key needed';$('modelState').classList.toggle('ok',!!m?.available)}
 async function switchMode(next){
+ if(activeChat&&next===mode&&activeProject===project)return;
  stopRunPolling();
+ if(activeChat){activeChat.controller.abort();activeChat=null;chatControls(false)}
  if(activeProject!==project){
    activeProject=project;lastAnswer='';runViews.clear();$('runs').replaceChildren();$('docTitle').value='';$('docText').value='';$('documentSources').replaceChildren();
    $('documentSelect').replaceChildren();
-   selectedPapers.clear();projectPapers=[];$('papers').replaceChildren();$('paperSearchResults').replaceChildren();$('paperSearchPanel').classList.add('hidden');$('paperStatus').textContent='';closeModal();
+   paperSearchEpoch++;selectedPapers.clear();projectPapers=[];$('papers').replaceChildren();$('paperSearchResults').replaceChildren();$('paperSearchPanel').classList.add('hidden');$('paperStatus').textContent='';closeModal();
  }
  mode=next;
  document.querySelectorAll('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.mode===mode));
@@ -75,35 +78,82 @@ async function switchMode(next){
 }
 async function refreshMessages(){
  if(!project)return;
- const messages=await api(`/projects/${project}/messages?mode=${mode}`);$('timeline').replaceChildren();
+ const pid=project,sentMode=mode;
+ const messages=await api(`/projects/${pid}/messages?mode=${sentMode}`);if(pid!==project||sentMode!==mode)return;$('timeline').replaceChildren();
  $('intro').classList.toggle('hidden',messages.length>0||mode==='investigate');
  for(const item of messages)appendMessage(item.role,item.content,item.model_id,JSON.parse(item.meta_json||'{}'));
  scrollToBottom();
 }
-function appendMessage(role,body,modelId,meta={}){
+const toolLabels={search_project_papers:'检索项目文献库',search_arxiv:'搜索 arXiv',import_arxiv_paper:'归档论文原文',read_research_artifact:'读取归档原文',find_research_claims:'查找研究主张',run_named_physics_check:'运行限定物理检查'};
+function appendMessageMeta(target,meta){
+ if(meta.state&&meta.state!=='completed')target.appendChild(text(element('p','chat-state'),meta.state==='stopped'?'已停止 · 以下内容不完整':'执行失败 · 以下内容不完整'));
+ if(meta.error)target.appendChild(text(element('p','citation-warning'),meta.error));
+ if(meta.tools?.length){const details=element('details','source-reads');details.appendChild(text(element('summary'),'执行与原文读取记录'));
+   for(const t of meta.tools){
+     if(t.source)details.appendChild(action(`${toolLabels[t.name]||t.name} · ${t.source.artifact_id} · p.${t.source.page} · offset ${t.source.offset}`,()=>viewArtifact(t.source.artifact_id,t.source.page,t.source.offset)));
+     else details.appendChild(text(element('p'),toolLabels[t.name]||t.name));
+   }target.appendChild(details);
+ }
+ if(meta.citations?.length){const details=element('details','source-reads');const invalid=meta.citations.filter(c=>!c.valid).length;
+   details.appendChild(text(element('summary',invalid?'citation-warning':''),invalid?`${invalid} 处引用未通过校验`:'引用来源与读取记录已核对（不代表科学验证）'));
+   details.open=invalid>0;
+   for(const c of meta.citations)details.appendChild(text(element('p',c.valid?'':'citation-warning'),`${c.target} · ${c.reason}`));
+   target.appendChild(details);
+ }
+}
+function appendMessage(role,body,modelId,meta={},streaming=false){
  const msg=element('article','msg '+role);const avatar=element('div','avatar');avatar.textContent=role==='assistant'?'∇':'U';
  const right=element('div','msg-body');const head=element('div','msg-header');const label=element('strong');label.textContent=role==='assistant'?'PDVL / '+(models.find(x=>x.id===modelId)?.title||modelId||'Research model'):'You';head.appendChild(label);
- const content=element('div','message-content');renderMarkdown(content,body);right.append(head,content);
- const reads=(meta.tools||[]).filter(t=>t.source);
- if(reads.length){const details=element('details','source-reads');details.appendChild(text(element('summary'),'原文读取记录'));
-   for(const t of reads)details.appendChild(action(`${t.source.artifact_id} · p.${t.source.page} · offset ${t.source.offset}`,()=>viewArtifact(t.source.artifact_id,t.source.page,t.source.offset)));
-   right.appendChild(details);
- }
- msg.append(avatar,right);$('timeline').appendChild(msg);return msg;
+ const content=element('div','message-content');
+ if(streaming)content.appendChild(text(element('pre'),body));else renderMarkdown(content,body,meta);
+ right.append(head,content);appendMessageMeta(right,meta);
+ msg.append(avatar,right);msg.content=content;msg.body=right;$('timeline').appendChild(msg);return msg;
 }
 function scrollToBottom(){const area=document.querySelector('.conversation-area');area.scrollTop=area.scrollHeight}
+function chatControls(running){$('send').disabled=running;$('stopChat').classList.toggle('hidden',!running);$('stopChat').disabled=false}
+async function stopChat(){
+ const chat=activeChat;if(!chat)return;
+ $('stopChat').disabled=true;chat.status.textContent='正在停止…';
+ if(!chat.id){chat.controller.abort();return}
+ try{await post(`/projects/${chat.pid}/messages/${chat.id}/stop`,{})}
+ catch(e){if(activeChat===chat){$('stopChat').disabled=false;notify(e.message)}}
+}
 async function send(){
- const q=$('question').value.trim();if(!project||!q)return;
- const pid=project,sentMode=mode,modelId=$('model').value;
- $('send').disabled=true;$('question').disabled=true;$('intro').classList.add('hidden');
- const optimistic=appendMessage('user',q);const loading=appendMessage('assistant','Thinking through the physics…');
- scrollToBottom();
+ const q=$('question').value.trim();if(!project||!q||activeChat)return;
+ const chat={pid:project,mode,modelId:$('model').value,controller:new AbortController(),draft:'',done:false};activeChat=chat;
+ chatControls(true);$('intro').classList.add('hidden');$('question').value='';
+ appendMessage('user',q);const loading=appendMessage('assistant','',chat.modelId,{},true);
+ chat.status=text(element('p','chat-state'),'正在连接模型…');loading.body.appendChild(chat.status);
+ const progress=element('details','source-reads');progress.open=true;progress.appendChild(text(element('summary'),'实时进度'));loading.body.appendChild(progress);
+ function event(item){
+   if(activeChat!==chat)return;
+   if(item.type==='start')chat.id=item.id;
+   if(item.type==='progress'){chat.draft='';loading.content.firstElementChild.textContent='';chat.status.textContent=`第 ${item.round} 轮 · ${item.message}`}
+   if(item.type==='delta'){chat.draft+=item.text;loading.content.firstElementChild.textContent=chat.draft;chat.status.textContent='正在生成回答 · 引用将在完成后校验'}
+   if(item.type==='tool_start'||item.type==='tool_end'){
+     const args=item.args||{},detail=args.query||args.arxiv_id||(args.artifact_id?`${args.artifact_id} · p.${args.page||1} · offset ${args.offset||0}`:'');
+     progress.appendChild(text(element('p'),`${item.type==='tool_start'?'正在':'已完成'}${toolLabels[item.name]||item.name} ${detail}${item.error?' · '+item.error:''}`));
+   }
+   if(item.type==='done'){
+     chat.done=true;chat.status.remove();progress.remove();loading.content.replaceChildren();renderMarkdown(loading.content,item.answer,item.meta);
+     appendMessageMeta(loading.body,item.meta);if(item.meta.state==='completed')lastAnswer=item.answer;
+   }
+   scrollToBottom();
+ }
  try{
-   const result=await post(`/projects/${pid}/chat`,{message:q,mode:sentMode,model_id:modelId,paper_ids:[...selectedPapers]});
-   if(pid!==project||sentMode!==mode)return;
-   loading.remove();appendMessage('assistant',result.answer,modelId,result.meta);lastAnswer=result.answer;$('question').value='';await refreshPapers();
- }catch(e){loading.remove();optimistic.remove();notify(e.message)}
- finally{$('send').disabled=false;$('question').disabled=false;scrollToBottom();$('question').focus()}
+   const response=await fetch(`/api/projects/${chat.pid}/chat`,{method:'POST',headers:{'Content-Type':'application/json'},signal:chat.controller.signal,
+     body:JSON.stringify({message:q,mode:chat.mode,model_id:chat.modelId,paper_ids:[...selectedPapers]})});
+   if(!response.ok){const error=await response.json();throw new Error(typeof error.detail==='string'?error.detail:'聊天请求失败')}
+   const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';
+   while(true){const {value,done}=await reader.read();buffer+=decoder.decode(value,{stream:!done});
+     let boundary;while((boundary=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,boundary);buffer=buffer.slice(boundary+1);if(line.trim())event(JSON.parse(line))}
+     if(done){if(buffer.trim())event(JSON.parse(buffer));break}
+   }
+   if(!chat.done)throw new Error('连接中断，回答不完整；重新打开对话可查看服务端保存的记录');
+   if(activeChat===chat)await refreshPapers().catch(e=>notify(e.message));
+ }catch(e){
+   if(activeChat===chat){chat.status.textContent=e.name==='AbortError'?'已停止 · 回答不完整':'连接失败 · 回答不完整';if(e.name!=='AbortError')notify(e.message)}
+ }finally{if(activeChat===chat){activeChat=null;chatControls(false);scrollToBottom();$('question').focus()}}
 }
 async function refreshEvidence(){
  if(!project)return;
@@ -325,14 +375,21 @@ async function importPaper(value){
    if(selectedPapers.size<2)selectedPapers.add(paper.id);await refreshPapers();$('paperSearchPanel').open=false;$('paperStatus').textContent='原文已归档，可选择精读或对照。';
  }catch(e){if(pid===project)$('paperStatus').textContent=e.message}
 }
-$('openLiterature').onclick=async()=>{try{await switchMode('discuss');$('literaturePanel').open=true;$('paperQuery').focus()}catch(e){notify(e.message)}};
-$('searchPapers').onclick=async()=>{
- const pid=project;$('searchPapers').disabled=true;$('paperStatus').textContent='正在搜索 arXiv…';$('paperSearchResults').replaceChildren();$('paperSearchPanel').classList.remove('hidden');$('paperSearchPanel').open=true;
- try{const data=await api(`/projects/${pid}/papers/search?query=${encodeURIComponent($('paperQuery').value.trim())}`);if(pid!==project)return;
-   for(const p of data.results){const card=element('div','paper-card');card.append(text(element('strong'),p.title),text(element('p'),`${p.arxiv_id} · ${p.date}`),text(element('p'),p.abstract),action('导入这篇原文',()=>importPaper(p.arxiv_id)));$('paperSearchResults').appendChild(card)}
-   $('paperStatus').textContent='搜索仅返回摘要；导入原文后才能精读。';
- }catch(e){if(pid===project)$('paperStatus').textContent=e.message}finally{$('searchPapers').disabled=false}
-};
+$('openLiterature').onclick=async()=>{try{if(mode!=='discuss')await switchMode('discuss');$('literaturePanel').open=true;$('paperQuery').focus()}catch(e){notify(e.message)}};
+async function searchPapers(library){
+ const pid=project,epoch=++paperSearchEpoch;
+ $('paperStatus').textContent=library?'正在检索本项目归档全文…':'正在搜索 arXiv…';$('paperSearchResults').replaceChildren();$('paperSearchPanel').classList.remove('hidden');$('paperSearchPanel').open=true;
+ try{const data=await api(`/projects/${pid}/papers/${library?'fulltext':'search'}?query=${encodeURIComponent($('paperQuery').value.trim())}`);if(pid!==project||epoch!==paperSearchEpoch)return;
+   for(const p of data.results){const card=element('div','paper-card');card.append(text(element('strong'),p.title));
+     if(library)card.append(text(element('p'),`PDF p.${p.page} · ${p.artifact_id}`),text(element('p'),p.excerpt),action('阅读命中原文页',()=>viewArtifact(p.artifact_id,p.page)));
+     else card.append(text(element('p'),`${p.arxiv_id} · ${p.date}`),text(element('p'),p.abstract),action('导入这篇原文',()=>importPaper(p.arxiv_id)));
+     $('paperSearchResults').appendChild(card);
+   }
+   $('paperStatus').textContent=library?(data.results.length?'全文关键词检索命中；请阅读原文上下文后判断。':'项目全文没有关键词命中；这不证明原文或相关结果不存在。'):'搜索仅返回摘要；导入原文后才能精读。';
+ }catch(e){if(pid===project&&epoch===paperSearchEpoch)$('paperStatus').textContent=e.message}
+}
+$('searchPapers').onclick=()=>searchPapers(false);
+$('searchLibrary').onclick=()=>searchPapers(true);
 $('importPaper').onclick=()=>importPaper($('arxivId').value.trim());
 $('paperPDF').onchange=async()=>{
  const file=$('paperPDF').files[0],pid=project;if(!file)return;
@@ -365,7 +422,7 @@ $('model').addEventListener('change',()=>{modelSelections[mode]=$('model').value
 $('projects').addEventListener('change',e=>{project=e.target.value;switchMode(mode).catch(err=>notify(err.message))});
 $('newProject').onclick=async()=>{const title=prompt('Title of your research project:');if(!title?.trim())return;const description=prompt('Scientific scope (optional):')||'';try{const p=await post('/projects',{title,description});await reloadProjects(p.id)}catch(e){notify(e.message)}};
 $('question').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
-$('send').onclick=send;$('saveAsClaim').onclick=saveFromComposer;$('addClaim').onclick=saveClaim;$('launchCodex').onclick=startCodex;
+$('stopChat').onclick=stopChat;$('send').onclick=send;$('saveAsClaim').onclick=saveFromComposer;$('addClaim').onclick=saveClaim;$('launchCodex').onclick=startCodex;
 $('refreshEvidence').onclick=()=>refreshEvidence().catch(e=>notify(e.message));
 $('refreshRuns').onclick=()=>refreshRuns().catch(e=>notify(e.message));
 $('docText').addEventListener('input',()=>renderDocumentSources());

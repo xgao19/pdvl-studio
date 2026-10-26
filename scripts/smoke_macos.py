@@ -113,7 +113,9 @@ def main():
                         claim = post(api, f'/projects/{pid}/claims', {'title': '条件符号恒等式',
                             'statement': '共享 log(mu) 项的差对 log(mu) 求导为零；额外 epsilon 项给出非零负控。',
                             'assumptions': ['mu>0', '其他参数不依赖 mu']})
-                        reply = post(api, f'/projects/{pid}/chat', {'message': '请只回复一句：安装包连接正常。'})
+                        response = api.post(f'/projects/{pid}/chat', json={'message': '请只回复一句：安装包连接正常。'})
+                        response.raise_for_status()
+                        reply = json.loads(response.text.splitlines()[-1])
                         assert reply['answer']
                         prompt = ('只在当前工作目录工作，禁止联网和读取工作区外文件。创建 check.py，用 SymPy '
                             '令 mu>0，F=a*log(mu)+b，G=F+C，a,b,C,epsilon 均不依赖 mu。'

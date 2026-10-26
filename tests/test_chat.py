@@ -55,7 +55,7 @@ def test_single_model_registry_locks_all_chat_modes(client, monkeypatch, tmp_pat
     for mode in MODE_PROMPTS:
         response = client.post(f'/api/projects/{pid}/chat', json={'mode': mode, 'message': 'Hello'})
         assert response.status_code == 200
-        assert response.json()['meta']['model'] == 'deepseek-v4.1-flash:1017'
+        assert json.loads(response.text.splitlines()[-1])['meta']['model'] == 'deepseek-v4.1-flash:1017'
     assert len(picked) == 4 and all(model['id'] == model_id for model in picked)
     for unavailable in ('deepseek-flash', 'deepseek-pro', 'gpt-sol'):
         response = client.post(f'/api/projects/{pid}/chat', json={'message': 'Try another', 'model_id': unavailable})

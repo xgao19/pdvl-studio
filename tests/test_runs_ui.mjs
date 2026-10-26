@@ -37,7 +37,12 @@ function setup(){
    let value=[];
    if(url==='/api/projects/p/runs')value=data.runs;
    else if(url==='/api/projects/p/papers')value=data.papers;
-   else if(url==='/api/projects/p/chat')value=data.chat;
+   else if(url.match(/\/projects\/[^/]+\/chat$/)){
+     const events=data.chatEvents||[{type:'start',id:'m_live'},{type:'done',...data.chat}];
+     const bytes=new TextEncoder().encode(events.map(e=>JSON.stringify(e)+'\n').join(''));
+     let offset=0;
+     return {ok:true,body:{getReader:()=>({read:()=>data.chatRead?data.chatRead(options.signal):Promise.resolve(offset>=bytes.length?{done:true}:{done:false,value:bytes.slice(offset,offset+=7)})})}};
+   }else if(url.endsWith('/stop')){data.stopped=true;value={state:'stopping'}}
    else if(url.includes('/artifacts/')&&url.includes('/text?'))value=data.source;
    else if(url.includes('/events?')){
      const [,rid,after]=url.match(/\/runs\/([^/]+)\/events\?after=(\d+)/);
@@ -49,7 +54,7 @@ function setup(){
    }
    return {ok:true,json:async()=>JSON.parse(JSON.stringify(value))};
  }
- const context=vm.createContext({document,fetch,TextDecoder,Date,Set,Map,Promise,JSON,
+ const context=vm.createContext({document,fetch,TextDecoder,AbortController,Date,Set,Map,Promise,JSON,
    setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id},clearTimeout:id=>timers.delete(id)});
  vm.runInContext(fs.readFileSync(new URL('../web/app.js',import.meta.url),'utf8'),context);
  vm.runInContext("project='p';activeProject='p';mode='investigate';",context);
@@ -139,4 +144,61 @@ test('source viewer uses page and offset reading and follows saved evidence page
  assert.match(app.calls.at(-1).url,/page=2&offset=7000/);
  assert.equal(app.run("evidencePage({provenance:JSON.stringify({paper_source:{pages:[3]}})})"),3);
  assert.equal(app.run("evidencePage({provenance:'{}'})"),1);
+});
+
+const tick=()=>new Promise(resolve=>setImmediate(resolve));
+const ndjson=events=>new TextEncoder().encode(events.map(e=>JSON.stringify(e)+'\n').join(''));
+
+test('chat streams text and tool progress before completion, stops on the server, and preserves the next draft',async()=>{
+ const app=setup();let finish;
+ app.run("mode='discuss'");app.document.getElementById('question').value='Explain the result';
+ let reads=0;
+ app.data.chatRead=async()=>{
+   if(reads++===0)return {done:false,value:ndjson([{type:'start',id:'m_live'},{type:'progress',round:1,message:'Reading'},
+     {type:'tool_start',name:'search_project_papers',args:{query:'epsilon'}},
+     {type:'tool_end',name:'search_project_papers',args:{query:'epsilon'}},{type:'delta',text:'中间结果🙂'}])};
+   if(reads===2)return new Promise(resolve=>{finish=resolve});
+   return {done:true};
+ };
+ const sending=app.run('send()');await tick();
+ assert.equal(app.run('activeChat.draft'),'中间结果🙂');
+ assert.equal(app.document.getElementById('stopChat').classList.contains('hidden'),false);
+ assert.equal(app.document.getElementById('send').disabled,true);
+ assert.equal(app.run('activeChat.status.textContent'),'正在生成回答 · 引用将在完成后校验');
+ app.document.getElementById('question').value='Next question already drafted';
+ await app.document.getElementById('stopChat').onclick();
+ assert.equal(app.data.stopped,true);assert.equal(app.document.getElementById('stopChat').disabled,true);
+ finish({done:false,value:ndjson([{type:'done',answer:'中间结果🙂',meta:{state:'stopped',tools:[]}}])});
+ await sending;
+ assert.equal(app.document.getElementById('question').value,'Next question already drafted');
+ assert.equal(app.run('lastAnswer'),'');assert.equal(app.run('activeChat'),null);
+ assert.equal(app.document.getElementById('send').disabled,false);
+ assert.equal(app.document.getElementById('stopChat').classList.contains('hidden'),true);
+ const assistant=app.document.getElementById('timeline').children[1];
+ assert.ok(assistant.body.children.some(n=>n.textContent.includes('已停止')));
+});
+
+test('mode changes abort chat and stale chunks cannot overwrite the new view',async()=>{
+ const app=setup();let signal,finish;
+ app.run("mode='discuss'");app.document.getElementById('question').value='Old question';
+ app.data.chatRead=s=>{signal=s;return new Promise(resolve=>{finish=resolve})};
+ const sending=app.run('send()');await tick();
+ await app.run("switchMode('write')");assert.equal(signal.aborted,true);
+ app.data.chatRead=async()=>({done:true});
+ finish({done:false,value:ndjson([{type:'done',answer:'Stale answer',meta:{state:'completed'}}])});
+ await sending;
+ assert.equal(app.run('lastAnswer'),'');assert.equal(app.document.getElementById('timeline').children.length,0);
+ assert.equal(app.document.getElementById('send').disabled,false);
+});
+
+test('project fulltext search opens actual matching pages and citation failures remain visible',async()=>{
+ const app=setup();app.document.getElementById('paperQuery').value='CASCADE';
+ // The shared search handler must target project archives rather than arXiv.
+ await app.document.getElementById('searchLibrary').onclick();
+ assert.ok(app.calls.some(c=>c.url==='/api/projects/p/papers/fulltext?query=CASCADE'));
+ app.run("appendMessage('assistant','A draft','model',{citations:[{target:'/api/artifacts/a_missing#page=9',valid:false,reason:'页码不存在'}]})");
+ const msg=app.document.getElementById('timeline').children.at(-1);
+ const checks=msg.body.children.at(-1);
+ assert.equal(checks.open,true);assert.match(checks.children[0].textContent,/1 处引用未通过校验/);
+ assert.match(checks.children[1].textContent,/页码不存在/);
 });

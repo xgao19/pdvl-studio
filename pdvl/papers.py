@@ -83,12 +83,28 @@ def list_papers(pid: str) -> list[dict]:
         return paper_records(con, pid)
 
 
-def archive_pdf(pid: str, content: bytes, title: str, metadata: dict | None = None) -> dict:
-    from .research import project_snapshot
+def search_library(pid: str, query: str) -> dict:
+    """Literal words, ranked across this project's archived PDF pages (not semantic search)."""
+    if not isinstance(query, str) or not 1 <= len(query.strip()) <= 150:
+        raise ValueError('Library query must have 1–150 characters')
+    terms = re.findall(r'[^\W_]+', query, re.UNICODE)
+    if not terms:
+        raise ValueError('Library query needs searchable words')
+    # Quoting words prevents the question from becoming FTS operators or SQL.
+    match = ' OR '.join('"' + term + '"' for term in dict.fromkeys(terms))
+    with connection() as con:
+        results = [dict(row) for row in con.execute(
+            "SELECT artifact_id,page,title,snippet(paper_fts,4,'[',']',' … ',48) AS excerpt "
+            "FROM paper_fts WHERE paper_fts MATCH ? AND project_id=? "
+            "ORDER BY bm25(paper_fts),artifact_id,CAST(page AS INTEGER) LIMIT 8", (match, pid))]
+    return {'results': results, 'notice': 'Keyword retrieval over archived PDF text, not semantic search. '
+            'Excerpts are leads: read original pages with read_research_artifact before citing. '
+            'No matches do not establish absence of a scientific result.'}
+
+
+def extract_pdf(content: bytes) -> list[str]:
     if not content.startswith(b'%PDF-') or len(content) > MAX_PDF_BYTES:
         raise ValueError('Upload a PDF of at most 8 MiB')
-    digest = hashlib.sha256(content).hexdigest()
-    snapshot = json.dumps(project_snapshot(pid), ensure_ascii=False)
     try:
         reader = PdfReader(io.BytesIO(content))
         if reader.is_encrypted:
@@ -110,6 +126,16 @@ def archive_pdf(pid: str, content: bytes, title: str, metadata: dict | None = No
         raise ValueError('Cannot extract PDF text: ' + type(exc).__name__) from exc
     if not any(pages):
         raise ValueError('No readable text layer; scanned PDFs need OCR before import')
+    return pages
+
+
+async def archive_pdf(pid: str, content: bytes, title: str, metadata: dict | None = None) -> dict:
+    from .research import project_snapshot
+    snapshot = json.dumps(project_snapshot(pid), ensure_ascii=False)
+    # Cancellation cannot kill Python parsing in a thread, but it prevents all
+    # subsequent archival writes. No detached thread owns a DB transaction.
+    pages = await asyncio.to_thread(extract_pdf, content)
+    digest = hashlib.sha256(content).hexdigest()
     paper = {**(metadata or {}), 'title': title[:200], 'pdf_sha256': digest, 'pages': pages}
     with connection() as con:
         con.execute('BEGIN IMMEDIATE')
@@ -153,7 +179,7 @@ async def import_arxiv(pid: str, value: str) -> dict:
                 content.extend(chunk)
                 if len(content) > MAX_PDF_BYTES:
                     raise ValueError('PDF exceeds 8 MiB')
-    return await asyncio.to_thread(archive_pdf, pid, bytes(content), metadata['title'], metadata)
+    return await archive_pdf(pid, bytes(content), metadata['title'], metadata)
 
 
 def read_artifact(pid: str, aid: str, page: int = 1, offset: int = 0, query: str = '') -> dict:

@@ -113,6 +113,19 @@ def init_db():
         if 'parent_run_id' not in {r['name'] for r in con.execute('PRAGMA table_info(runs)')}:
             con.execute('ALTER TABLE runs ADD COLUMN parent_run_id TEXT REFERENCES runs(id)')
         con.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_run_parent ON runs(parent_run_id) WHERE parent_run_id IS NOT NULL')
+        # Rebuildable page index; archived bytes remain the source of truth.
+        con.execute("CREATE VIRTUAL TABLE IF NOT EXISTS paper_fts USING fts5("
+                    "project_id UNINDEXED,artifact_id UNINDEXED,page UNINDEXED,title,text,tokenize='unicode61')")
+        index_sql = """INSERT INTO paper_fts(project_id,artifact_id,page,title,text)
+            SELECT r.project_id,a.id,CAST(p.key AS INTEGER)+1,json_extract(a.content,'$.title'),p.value
+            FROM artifacts a JOIN runs r ON r.id=a.run_id,json_each(a.content,'$.pages') p
+            WHERE a.name='paper.json' AND r.agent='literature'
+            AND NOT EXISTS (SELECT 1 FROM paper_fts f WHERE f.artifact_id=a.id)"""
+        con.execute('CREATE TRIGGER IF NOT EXISTS index_paper AFTER INSERT ON artifacts '
+                    "WHEN new.name='paper.json' BEGIN " + index_sql + ' AND a.id=new.id; END')
+        con.execute('CREATE TRIGGER IF NOT EXISTS unindex_paper AFTER DELETE ON artifacts BEGIN '
+                    'DELETE FROM paper_fts WHERE artifact_id=old.id; END')
+        con.execute(index_sql)
 
 
 def add_run_event(con, rid: str, kind: str, message: str):

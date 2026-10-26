@@ -47,3 +47,49 @@ def pdf_factory():
         target = io.BytesIO();writer.write(target)
         return target.getvalue()
     return make
+
+
+@pytest.fixture()
+def model_stream(monkeypatch):
+    """Real HTTP/SSE boundary with deterministic model replies, including tool fragments."""
+    import json
+    from copy import deepcopy
+    import httpx
+    from pdvl import providers
+    def install(replies):
+        replies = iter(replies)
+        sent = []
+        def handle(request):
+            payload = json.loads(request.content)
+            sent.append((str(request.url), deepcopy(payload)))
+            reply = next(replies)
+            assert payload['stream'] is True
+            if request.url.path.endswith('/responses'):
+                events = []
+                for item in reply.get('output', []):
+                    if item.get('type') == 'message':
+                        for piece in item.get('content', []):
+                            body = piece.get('text', '')
+                            events.extend({'type': 'response.output_text.delta', 'delta': c} for c in (body[:3], body[3:]) if c)
+                events.append({'type': 'response.completed', 'response': {'status': 'completed', **reply}})
+            else:
+                result = reply['choices'][0]['message']
+                events = []
+                body = result.get('content') or ''
+                for chunk in (body[:3], body[3:]):
+                    if chunk:
+                        events.append({'choices': [{'delta': {'content': chunk}}]})
+                for i, call in enumerate(result.get('tool_calls') or []):
+                    function = call['function']
+                    events.extend([
+                        {'choices': [{'delta': {'tool_calls': [{'index': i, 'id': call['id'], 'function': {'name': function['name'], 'arguments': function['arguments'][:4]}}]}}]},
+                        {'choices': [{'delta': {'tool_calls': [{'index': i, 'function': {'arguments': function['arguments'][4:]}}]}}]},
+                    ])
+                events.append({'model': reply.get('model', payload['model']), 'usage': reply.get('usage', {}),
+                               'choices': [{'delta': {}, 'finish_reason': 'tool_calls' if result.get('tool_calls') else 'stop'}]})
+            body = ''.join('data: ' + json.dumps(e, ensure_ascii=False) + '\n\n' for e in events) + 'data: [DONE]\n\n'
+            return httpx.Response(200, text=body, headers={'Content-Type': 'text/event-stream'})
+        real_client = httpx.AsyncClient
+        monkeypatch.setattr(providers.httpx, 'AsyncClient', lambda **kw: real_client(transport=httpx.MockTransport(handle), **kw))
+        return sent
+    return install

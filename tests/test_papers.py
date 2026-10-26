@@ -3,12 +3,11 @@ import asyncio
 import hashlib
 import io
 import json
-from copy import deepcopy
 
 import httpx
 import pytest
 from pypdf import PdfWriter
-from pdvl import papers, providers
+from pdvl import papers
 from pdvl.db import init_db
 from pdvl.research import project_snapshot
 from pdvl.tools import execute_research_tool, tools_for_mode
@@ -128,7 +127,7 @@ def test_real_arxiv_metadata_and_pdf_transport_are_shared_by_search_import_and_t
     assert client.get(f'/api/projects/{pid}/evidence').json() == []
 
 
-def test_discuss_ollama_loop_reads_both_originals_and_records_page_provenance(client, pdf_factory, monkeypatch, tmp_path):
+def test_discuss_ollama_loop_reads_both_originals_and_records_page_provenance(client, pdf_factory, monkeypatch, tmp_path, model_stream):
     pid = project(client)
     original_a = 'C is constant; derivative is zero. ' + '"\\' * 2600
     a = upload(client, pid, pdf_factory('A abstract', original_a), 'Study A').json()
@@ -144,15 +143,9 @@ def test_discuss_ollama_loop_reads_both_originals_and_records_page_provenance(cl
             {'id': str(n), 'type': 'function', 'function': {'name': 'read_research_artifact',
              'arguments': json.dumps({'artifact_id': p['id'], 'page': 2})}} for n, p in enumerate((a, b))]}}]},
         {'model': 'deepseek-v4.1-flash:1017', 'choices': [{'message': {'content': final}}]}])
-    sent = []
-    class ModelClient:
-        async def __aenter__(self):return self
-        async def __aexit__(self, *args):pass
-        async def post(self, url, headers, json):
-            sent.append((url, deepcopy(json)))
-            return httpx.Response(200, json=next(replies), request=httpx.Request('POST', url))
-    monkeypatch.setattr(providers.httpx, 'AsyncClient', lambda **kw: ModelClient())
-    result = client.post(f'/api/projects/{pid}/chat', json={'message': 'Compare the definitions', 'paper_ids': [a['id'], b['id']]}).json()
+    sent = model_stream(replies)
+    result = client.post(f'/api/projects/{pid}/chat', json={'message': 'Compare the definitions', 'paper_ids': [a['id'], b['id']]}).text.splitlines()[-1]
+    result = json.loads(result)
     assert result['answer'] == final
     assert sent[0][0] == 'https://ollama.com/v1/chat/completions'
     assert a['id'] in sent[0][1]['messages'][0]['content'] and b['id'] in sent[0][1]['messages'][0]['content']
@@ -176,3 +169,26 @@ def test_combined_archive_limit_rolls_back_the_whole_import(client, pdf_factory,
     assert result.status_code == 422 and 'archive limit' in result.json()['detail']
     assert db.rows('SELECT id FROM runs WHERE project_id=?', (pid,)) == []
     assert db.rows('SELECT id FROM artifacts') == []
+
+
+def test_cancelling_pdf_parse_cannot_archive_after_the_chat_has_stopped(client, monkeypatch):
+    import threading
+    pid = project(client)
+    entered, release = threading.Event(), threading.Event()
+    def blocked_parse(_content):
+        entered.set();assert release.wait(3)
+        return ['Parsing finished after cancellation']
+    monkeypatch.setattr(papers, 'extract_pdf', blocked_parse)
+    async def run():
+        task = asyncio.create_task(papers.archive_pdf(pid, b'%PDF-placeholder', 'Cancelled import'))
+        assert await asyncio.to_thread(entered.wait, 2)
+        task.cancel()
+        try:
+            with pytest.raises(asyncio.CancelledError):await task
+        finally:
+            release.set()
+    asyncio.run(run())
+    assert client.get(f'/api/projects/{pid}/papers').json() == []
+    from pdvl.db import rows
+    assert rows('SELECT artifact_id FROM paper_fts') == []
+    assert rows('SELECT id FROM runs WHERE project_id=?', (pid,)) == []

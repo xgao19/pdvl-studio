@@ -1,3 +1,4 @@
+import json
 from pdvl.db import one
 
 
@@ -38,9 +39,10 @@ def test_models_and_missing_api_key(client):
     assert not next(m for m in models if m['id']=='deepseek-pro')['available']
     p=client.post('/api/projects',json={'title':'Private research'}).json()
     r=client.post(f"/api/projects/{p['id']}/chat",json={'message':'What is the anomaly?','model_id':'deepseek-pro'})
-    assert r.status_code==503
-    assert 'DEEPSEEK_API_KEY' in r.json()['detail']
-    assert client.get(f"/api/projects/{p['id']}/messages").json()==[]
+    assert r.status_code==200
+    result=json.loads(r.text.splitlines()[-1])
+    assert result['meta']['state']=='failed' and 'Missing API key' in result['meta']['error']
+    assert len(client.get(f"/api/projects/{p['id']}/messages").json())==2
 
 
 def test_manuscript_revisions_and_codex_guard(client):

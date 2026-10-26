@@ -6,9 +6,13 @@ import xml.etree.ElementTree as ET
 import httpx
 from .db import rows
 from .verification import check, TESTS
-from .papers import read_artifact, search_arxiv, import_arxiv
+from .papers import read_artifact, search_arxiv, import_arxiv, search_library
 
 TOOL_DEFS = [
+    {"type":"function", "name":"search_project_papers",
+     "description":"Rank keyword matches across all archived papers in this project. Search useful English terminology for English papers. Returns page excerpts, not full-paper reading. Read the relevant original pages before citing; no matches are not negative scientific evidence.",
+     "parameters":{"type":"object","properties":{"query":{"type":"string","minLength":1,"maxLength":150}},
+                   "required":["query"],"additionalProperties":False}},
     {"type":"function", "name":"read_research_artifact",
      "description":"Read archived original text, including its hash and exact source citation. For papers use PDF page numbers; query finds matching pages, then read those pages. Follow next_offset to read a long page completely. Text extraction may lose equations/figures; never claim unread pages were reviewed. Binary artifacts are downloadable only.",
      "parameters":{"type":"object","properties":{"artifact_id":{"type":"string"},
@@ -40,6 +44,11 @@ def tools_for_mode(mode: str) -> list[dict]:
 async def execute_research_tool(name: str, args: dict, project_id: str) -> dict:
     if not isinstance(args, dict):
         return {'error': 'Tool arguments must be an object'}
+    if name == 'search_project_papers':
+        try:
+            return search_library(project_id, args.get('query', ''))
+        except ValueError as exc:
+            return {'error': str(exc)}
     if name == 'read_research_artifact':
         aid = args.get('artifact_id')
         if not isinstance(aid, str):

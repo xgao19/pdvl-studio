@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 import json
 import os
 import xml.etree.ElementTree as ET
@@ -8,8 +9,8 @@ from urllib.parse import quote
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import PlainTextResponse
-from contextlib import asynccontextmanager
-from fastapi.responses import FileResponse, Response
+from contextlib import asynccontextmanager, suppress
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from markdown_it import MarkdownIt
@@ -17,12 +18,11 @@ import bleach
 from .config import ROOT, model_settings, codex_runtime, codex_public
 from .db import init_db, one, rows, execute, uid, utcnow, append_evidence, connection, add_run_event
 from .prompts import MODE_PROMPTS, DEFAULT_SCIENTIFIC_VOICE
-from .research import project_snapshot, research_context, citation_ids
+from .research import project_snapshot, research_context, citation_ids, validate_chat_citations
 from .providers import pick_model, models_public, generate, ProviderError
 from .verification import check, TESTS
 from .tools import tools_for_mode
-from .papers import list_papers, search_arxiv, import_arxiv, archive_pdf, read_artifact, MAX_PDF_BYTES
-from starlette.concurrency import run_in_threadpool
+from .papers import list_papers, search_arxiv, import_arxiv, archive_pdf, read_artifact, MAX_PDF_BYTES, search_library
 from . import __version__
 
 @asynccontextmanager
@@ -33,6 +33,7 @@ async def lifespan(_app):
 app = FastAPI(title="PDVL Studio", version=__version__, docs_url="/api/docs", redoc_url=None, lifespan=lifespan)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver", "[::1]"])
 app.mount("/static", StaticFiles(directory=ROOT / "web"), name="static")
+active_chats: dict[str, tuple[str, asyncio.Task]] = {}
 
 @app.middleware("http")
 async def restrict_browser_origins(request: Request, call_next):
@@ -117,11 +118,19 @@ def home_page():
 
 class MarkdownRender(BaseModel):
     markdown: str = Field(min_length=0, max_length=250000)
+    blocked_links: list[str] = Field(default_factory=list, max_length=1000)
 
 @app.post('/api/render')
 def render_markdown(body: MarkdownRender):
     # The application never loads third-party JS on the browser page, important for unpublished physics.
-    html=MarkdownIt('commonmark',{'html':False,'linkify':False}).render(body.markdown)
+    renderer=MarkdownIt('commonmark',{'html':False,'linkify':False})
+    tokens=renderer.parse(body.markdown)
+    blocked=set(body.blocked_links)
+    for block in tokens:
+        for token in block.children or []:
+            if token.type == 'link_open' and token.attrGet('href') in blocked:
+                token.attrs = {'title': '引用未通过校验，请核对读取记录'}
+    html=renderer.renderer.render(tokens, renderer.options, {})
     tags={'p','h1','h2','h3','h4','ul','ol','li','em','strong','code','pre','blockquote','a',
           'table','thead','tbody','tr','th','td','hr','br'}
     sanitized=bleach.clean(html,tags=tags,attributes={'a':['href','title']},protocols=['http','https','mailto'],strip=True)
@@ -165,7 +174,11 @@ async def chat(pid: str, req: NewMessage):
     except ValueError as error:
         raise HTTPException(422, str(error))
     prior = rows("SELECT * FROM messages WHERE project_id=? AND mode=? ORDER BY rowid DESC LIMIT 16", (pid, req.mode))
-    conversation = [{"role": r["role"], "content": r["content"]} for r in reversed(prior)]
+    conversation = []
+    for item in reversed(prior):
+        state = json.loads(item['meta_json']).get('state')
+        prefix = f'[Previous response {state}; incomplete.]\n' if item['role'] == 'assistant' and state in ('stopped', 'failed') else ''
+        conversation.append({'role': item['role'], 'content': prefix + item['content']})
     conversation.append({"role": "user", "content": req.message})
     snapshot = project_snapshot(pid)
     context = research_context(snapshot, req.mode)
@@ -182,16 +195,95 @@ async def chat(pid: str, req: NewMessage):
     if req.mode in ('discuss','write'):
         style=one('SELECT style_text FROM editorial_styles WHERE project_id=?',(pid,))
         context += "\n\nEditorial preference (style guidance, not physical evidence): " + (style['style_text'] if style else DEFAULT_SCIENTIFIC_VOICE)
-    try:
-        answer, meta = await generate(model, MODE_PROMPTS[req.mode] + "\n\n" + context, conversation,
-                                      project_id=pid, tools=tools_for_mode(req.mode))
-    except ProviderError as error:
-        raise HTTPException(503, str(error))
-    with connection() as con:
-        timestamp = utcnow()
-        con.execute("INSERT INTO messages(id,project_id,mode,role,content,model_id,created_at,meta_json) VALUES (?,?,?,?,?,?,?,?)", (uid("m"), pid, req.mode, "user", req.message, None, timestamp, json.dumps({'paper_ids': req.paper_ids})))
-        con.execute("INSERT INTO messages(id,project_id,mode,role,content,model_id,created_at,meta_json) VALUES (?,?,?,?,?,?,?,?)", (uid("m"), pid, req.mode, "assistant", answer, model["id"], timestamp, json.dumps(meta, ensure_ascii=False)))
-    return {"answer": answer, "meta": meta, "mode": req.mode}
+    # A single request owns its upstream calls. Closing it cancels the producer,
+    # including an in-flight model request, tool import or arXiv wait.
+    async def events():
+        queue = asyncio.Queue(maxsize=32)
+        disconnected = False
+        trace, draft = [], []
+        mid = uid('m')
+        previous_reads = [t['source'] for item in prior if item['role'] == 'assistant'
+                          for t in json.loads(item['meta_json']).get('tools', []) if t.get('source')]
+
+        async def emit(event):
+            if event['type'] == 'progress':
+                draft.clear()
+            elif event['type'] == 'delta':
+                draft.append(event['text'])
+            await queue.put(event)
+
+        async def produce():
+            answer, state, error = '', 'completed', None
+            meta = {'model': model['model'], 'provider': model['provider'], 'tools': trace}
+            try:
+                answer, meta = await generate(model, MODE_PROMPTS[req.mode] + '\n\n' + context, conversation,
+                                              project_id=pid, tools=tools_for_mode(req.mode), emit=emit, trace=trace)
+            except asyncio.CancelledError:
+                state = 'stopped'
+            except ProviderError as exc:
+                state, error = 'failed', str(exc)
+            except Exception:
+                state, error = 'failed', '聊天执行失败，请重试；已保留读取记录'
+            finally:
+                answer = answer if state == 'completed' else ''.join(draft)
+                answer, checks = validate_chat_citations(pid, answer, previous_reads + [t['source'] for t in trace if t.get('source')])
+                meta.update(state=state, citations=checks)
+                if error:
+                    meta['error'] = error
+                with connection() as con:
+                    timestamp = utcnow()
+                    con.execute("INSERT INTO messages(id,project_id,mode,role,content,model_id,created_at,meta_json) VALUES (?,?,?,?,?,?,?,?)",
+                                (uid('m'), pid, req.mode, 'user', req.message, None, timestamp, json.dumps({'paper_ids': req.paper_ids})))
+                    con.execute("INSERT INTO messages(id,project_id,mode,role,content,model_id,created_at,meta_json) VALUES (?,?,?,?,?,?,?,?)",
+                                (mid, pid, req.mode, 'assistant', answer, model['id'], timestamp, json.dumps(meta, ensure_ascii=False)))
+            if not disconnected:
+                await queue.put({'type': 'done', 'id': mid, 'answer': answer, 'meta': meta, 'mode': req.mode})
+
+        task = asyncio.create_task(produce())
+        active_chats[mid] = (pid, task)
+        try:
+            await asyncio.sleep(0)  # Enter producer cleanup before exposing its stop handle.
+            yield json.dumps({'type': 'start', 'id': mid}) + '\n'
+            while True:
+                waiting = asyncio.create_task(queue.get())
+                try:
+                    ready, _ = await asyncio.wait((waiting, task), return_when=asyncio.FIRST_COMPLETED)
+                    if task in ready:
+                        await task  # Surface storage/validation failures instead of hanging on an empty queue.
+                    item = await waiting
+                finally:
+                    waiting.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await waiting
+                yield json.dumps(item, ensure_ascii=False) + '\n'
+                if item['type'] == 'done':
+                    break
+        finally:
+            disconnected = True
+            task.cancel()
+            try:
+                with suppress(asyncio.CancelledError):
+                    await task
+            finally:
+                active_chats.pop(mid, None)
+
+    return StreamingResponse(events(), media_type='application/x-ndjson',
+                             headers={'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no'})
+
+
+@app.post('/api/projects/{pid}/messages/{mid}/stop')
+async def stop_chat(pid: str, mid: str):
+    project_required(pid)
+    message = one("SELECT meta_json FROM messages WHERE id=? AND project_id=? AND role='assistant'", (mid, pid))
+    if message:
+        return {'state': json.loads(message['meta_json']).get('state', 'completed')}
+    active = active_chats.get(mid)
+    if active and active[0] == pid:
+        if not active[1].cancelling():
+            active[1].cancel()
+        return {'state': 'stopping'}
+    raise HTTPException(404, 'Chat not found in this project')
+
 
 @app.get("/api/projects/{pid}/claims")
 def claims(pid: str):
@@ -230,6 +322,15 @@ def papers(pid: str):
     return list_papers(pid)
 
 
+@app.get('/api/projects/{pid}/papers/fulltext')
+def search_project_papers(pid: str, query: str = Query(min_length=1, max_length=150)):
+    project_required(pid)
+    try:
+        return search_library(pid, query)
+    except ValueError as error:
+        raise HTTPException(422, str(error))
+
+
 @app.get('/api/projects/{pid}/papers/search')
 async def search_papers(pid: str, query: str = Query(min_length=2, max_length=130)):
     project_required(pid)
@@ -259,7 +360,7 @@ async def upload_paper(pid: str, request: Request, title: str = Query(min_length
         if len(content) > MAX_PDF_BYTES:
             raise HTTPException(413, 'PDF exceeds 8 MiB')
     try:
-        return await run_in_threadpool(archive_pdf, pid, bytes(content), title)
+        return await archive_pdf(pid, bytes(content), title)
     except ValueError as error:
         raise HTTPException(422, str(error))
 
