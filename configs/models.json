@@ -1,0 +1,15 @@
+{
+  "discuss": "gpt-sol",
+  "investigate": "gpt-astra",
+  "verify": "gpt-astra",
+  "write": "gpt-astra",
+  "models": [
+    {"id": "gpt-astra", "provider": "openai", "model": "gpt-6-astra", "title": "GPT-6 Astra", "api": "responses", "effort": "high"},
+    {"id": "gpt-sol", "provider": "openai", "model": "gpt-6.1-sol", "title": "GPT-6.1 Sol", "api": "responses", "effort": "medium"},
+    {"id": "gpt-luna", "provider": "openai", "model": "gpt-6-luna", "title": "GPT-6 Luna", "api": "responses", "effort": "low"},
+    {"id": "deepseek-pro", "provider": "deepseek", "model": "deepseek-v4-pro", "title": "DeepSeek V4 Pro", "api": "responses", "effort": "high"},
+    {"id": "deepseek-flash", "provider": "deepseek", "model": "deepseek-flash", "title": "DeepSeek Flash", "api": "responses", "effort": "low"},
+    {"id": "custom-chat", "provider": "custom", "model": "${CUSTOM_MODEL}", "title": "Custom Chat Completions", "api": "chat_completions", "effort": null},
+    {"id": "local", "provider": "custom", "model": "${CUSTOM_MODEL}", "title": "Custom OpenAI-compatible", "api": "responses", "effort": null}
+  ]
+}

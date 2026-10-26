@@ -1,0 +1,1 @@
+This standalone Studio replaces the old two-client ChatGPT ↔ Codex MCP bridge architecture. It retains the four science modes, the evidence-centered model, the negative CS-kernel test and the separation of scientific interpretation from technical execution. The authoritative app is now PDVL itself, with OpenAI and DeepSeek as replaceable providers.

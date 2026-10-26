@@ -1,0 +1,8 @@
+{
+  "name": "pdvl-codex-bridge",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {"@openai/codex-sdk": "0.164.0"},
+  "engines": {"node": ">=18"}
+}

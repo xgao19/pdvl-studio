@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>PDVL Studio — Physics Research Workbench</title>
+<link rel="stylesheet" href="/static/style.css"/>
+<script defer src="/static/app.js"></script>
+</head>
+<body>
+<div id="shell">
+  <aside id="sidebar">
+    <div class="brand"><div class="brand-logo">∂</div><div><strong>PDVL <span>Studio</span></strong><small>PHYSICS RESEARCH OS</small></div></div>
+    <div class="side-section"><span class="overline">RESEARCH PROJECT</span><select id="projects"></select><button class="new-project ghost" id="newProject">+ New research project</button></div>
+    <div class="side-section"><span class="overline">WORKSPACE</span>
+      <nav id="modes">
+        <button data-mode="discuss" class="nav-item active"><span class="nav-icon">◈</span> Discuss <small>Explore ideas</small></button>
+        <button data-mode="investigate" class="nav-item"><span class="nav-icon">⌕</span> Investigate <small>Deep research</small></button>
+        <button data-mode="verify" class="nav-item"><span class="nav-icon">◇</span> Verify <small>Challenge claims</small></button>
+        <button data-mode="write" class="nav-item"><span class="nav-icon">✎</span> Write <small>Manuscript studio</small></button>
+      </nav>
+    </div>
+    <div class="side-section"><span class="overline">RESEARCH LIBRARY</span>
+      <button id="openBrief" class="sidebar-link">▤ &nbsp; Scientific brief</button>
+      <button id="editStyle" class="sidebar-link">✍ &nbsp; Scientific voice</button>
+      <button id="seedProject" class="sidebar-link">⊕ &nbsp; Load CS-kernel example</button>
+    </div>
+    <div class="sidebar-footer"><div class="live-dot"></div> Local-first · Your research stays in your data store <div class="aside-small">Model API calls transmit selected context to the chosen provider.</div></div>
+  </aside>
+  <main id="main">
+    <header id="toolbar">
+      <div class="heading-group"><span class="eyebrow" id="modeCaption">SCIENTIFIC CONVERSATION</span><h1 id="modeTitle">Discuss <span>the physics</span></h1></div>
+      <div class="model-picker"><label for="model">MODEL</label><select id="model"></select><span id="modelState" class="state-tag">Not connected</span></div>
+    </header>
+    <div class="main-content">
+      <section class="conversation-area">
+        <div class="intro" id="intro"><div class="intro-mark">∇</div><h2>Think beyond the calculation.</h2><p>Discuss nonperturbative QCD naturally. When a question needs a rigorous check, turn it into evidence rather than an engineering report.</p><div class="suggestions"><button class="suggestion" data-q="Can a scheme-independent combination of Collins–Soper kernels provide an independent test of nonperturbative TMD universality?">Explore a universality test</button><button class="suggestion" data-q="What QCD information can Euclidean observables distinguish without an ill-posed spectral reconstruction?">Euclidean-to-Minkowski frontier</button></div></div>
+        <div id="timeline" aria-live="polite"></div>
+        <div id="runPanel" class="run-panel hidden"><div class="panel-head"><strong>Codex Investigation</strong><span>Runs in an isolated Git workspace</span></div><textarea id="codexQuestion" placeholder="Describe a precise physics problem for Codex to investigate…"></textarea><div class="inline-actions"><select id="codexModel"><option value="">Codex default model</option><option value="gpt-6-astra">GPT-6 Astra</option><option value="gpt-6.1-sol">GPT-6.1 Sol</option><option value="deepseek-v4-pro">DeepSeek V4 Pro (requires Codex provider)</option><option value="deepseek-flash">DeepSeek Flash (requires Codex provider)</option></select><button id="launchCodex" class="primary compact">Launch Codex research</button></div><button id="refreshRuns" class="secondary compact">Refresh tasks and artifacts</button><div id="runs"></div></div>
+        <div id="manuscriptPanel" class="manuscript-panel hidden"><div class="panel-head"><strong>Manuscript notebook</strong><span>Revisioned independent of chats</span></div><input id="docTitle" placeholder="Section or draft title"/><textarea id="docText" placeholder="Draft or paste a manuscript section; every save creates a new revision…"></textarea><p>Use “Cite in manuscript” beside evidence to link a passage to its source.</p><div id="documentSources"></div><div class="inline-actions"><select id="documentSelect"><option value="">New document</option></select><button id="useLastAnswer" class="secondary compact">Use last answer</button><button id="saveDocument" class="primary compact">Save revision</button></div></div>
+      </section>
+      <section class="composer-section"><div id="alert" role="status" class="alert hidden"></div><div class="composer"><textarea id="question" rows="2" placeholder="Ask a physics question, challenge an argument, or develop a new idea…"></textarea><div class="composer-foot"><span>↵ Enter to send · Shift + Enter for new line</span><div><button id="saveAsClaim" class="ghost compact">Save as hypothesis</button><button id="send" class="primary compact">Send ↗</button></div></div></div></section>
+    </div>
+  </main>
+  <aside id="evidenceRail"><div class="rail-head"><span class="overline">RESEARCH EVIDENCE</span><button class="icon-button" id="refreshEvidence" aria-label="refresh">↻</button></div><div class="rail-insights"><div><strong id="claimCount">0</strong><small>CLAIMS</small></div><div><strong id="evidenceCount">0</strong><small>EVIDENCE</small></div></div><div id="claims"></div><div class="rail-add"><span class="overline">NEW HYPOTHESIS</span><input id="claimTitle" placeholder="Short title"/><textarea id="claimStatement" placeholder="Precise proposition and assumptions…"></textarea><button id="addClaim" class="secondary compact">+ Record as idea</button></div><div class="footnote">A saved idea is not a verified result. Only scoped physical tests and independent evidence can justify promotion.</div></aside>
+</div>
+<div class="modal-backdrop hidden" id="modal"><div class="modal"><div class="modal-head"><strong id="modalTitle">Research Brief</strong><button id="closeModal" class="icon-button">✕</button></div><pre id="modalText"></pre><textarea id="modalEditor" class="hidden" rows="14" aria-label="Editorial style"></textarea><div class="inline-actions"><button class="primary compact" id="saveModal" style="display:none">Save scientific voice</button><button class="primary compact" id="copyModal">Copy text</button></div></div></div>
+</body>
+</html>
