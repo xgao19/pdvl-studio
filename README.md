@@ -15,6 +15,10 @@ One GitHub repository, one local web workspace, and independent research state. 
 - **Optional MCP:** local STDIO server exposes read-only research context to outside agent clients; not required by the standalone web UI.
 - **Update-friendly:** model registry and pinned SDK. Do not silently change models for recorded research tasks.
 
+### macOS Intel app
+
+Download the [macOS Intel preview](https://github.com/xgao19/pdvl-studio/releases/tag/v0.2.0-intel-preview.1), drag **PDVL Studio.app** to Applications, and enter your own Ollama API key on first launch. Python, Node, Git and the pinned Codex runtime are bundled. Research data stays in `~/Library/Application Support/PDVL Studio` across app updates. The preview uses ad-hoc signing and is not Apple notarized; it was tested on macOS 26.6.2 Intel. See [installation, build and validation details](docs/MACOS_INTEL.md).
+
 ### Quick start (macOS / Linux)
 
 ```bash

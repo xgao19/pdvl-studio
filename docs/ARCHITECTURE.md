@@ -55,7 +55,7 @@ Continuation is the sole resume entry point; arbitrary `thread_id` input on new 
 
 `PDVL_HOME/codex/config.toml` is the single model/provider configuration for new Codex tasks. The supported authentication path is an explicit Responses provider with `env_key` and `requires_openai_auth=false`. The worker supplies a small child environment containing the selected API-key variable and OS/process essentials. Both `CODEX_HOME` and `CODEX_SQLITE_HOME` point to this private directory; inherited app session/credential overrides are excluded. The bridge pins ephemeral credential storage and the frozen provider settings, disables shell snapshots that could persist keys, and restricts command environment inheritance to core OS variables. Nothing writes to the ordinary Codex configuration or auth store.
 
-`runs.context_json.codex_runtime` freezes non-secret provider metadata alongside research state. This reuses the snapshot instead of adding another config table or API secret field. The worker uses that frozen runtime, even if the private configuration changes after queuing. Model-prefix guessing and `PDVL_CODEX_MODEL` were removed. The UI shows the configured model; the task API no longer accepts model overrides. Missing configuration or authentication fails explicitly.
+`runs.context_json.codex_runtime` freezes non-secret provider metadata alongside research state. This reuses the snapshot instead of adding another config table or API secret field. The worker retains the frozen model even if the default changes after queuing. A changed credential destination (provider/base URL/key variable/home) rejects the queued execution before passing a key to a CLI. Model-prefix guessing and `PDVL_CODEX_MODEL` were removed. The UI shows the configured model; the task API no longer accepts model overrides. Missing configuration or authentication fails explicitly.
 
 Continuation compares the parent's frozen runtime with the current profile before queueing. Historical sessions without this metadata and sessions from another provider/model/home cannot cross into the new runtime. Their scientific records remain readable. The run list exposes `runtime_matches` so the page hides unavailable continuation controls. Local CLI session state lives in the private Codex home; the research database archive preserves evidence bytes, not a portable replacement for the CLI session store.
 
@@ -68,7 +68,7 @@ A test must declare the **class of claim** it checks. The RG-difference verifier
 - SQLite persists state through browser or app restarts; `pdvl backup` uses a consistent SQLite backup API.
 - Each model response logs its alias and provider metadata where available. Some provider aliases resolve to changing snapshots; reproducibility requires storing the model identity reported by provider and updating controlled aliases only after testing.
 - Codex task logs, sanitized stderr and workspaces live under `.local/runs/`. They are intentionally not committed to public GitHub.
-- Dependabot proposes dependency updates; CI validates offline invariants. Model registry changes require explicit review and at least the seed benchmark before adoption.
+- Runtime archives, Python requirements and the Codex SDK/CLI are pinned; offline and packaged smoke tests validate updates. Model registry changes require explicit review and at least the seed benchmark before adoption.
 - Adding a new provider should require editing `configs/models.json` plus adding a provider adapter if its protocol differs, not rewriting the scientific application.
 
 ## Roadmap without architectural rewrites
@@ -78,3 +78,7 @@ A test must declare the **class of claim** it checks. The RG-difference verifier
 3. Multi-worker scheduling: add a dedicated broker only if concurrency grows beyond the current local SQLite worker.
 4. Dedicated desktop app or polished LaTeX editor: can reuse API and research state; requires no change to the inference/provider core.
 5. Multi-user deployment would require proper authentication, access control, encrypted secrets, per-project isolation and audit policies; **not supported by this local-only scaffold**.
+
+## Intel desktop distribution
+
+The native AppKit launcher starts the existing service using bundled runtimes. `pdvl.desktop` owns one backend/worker pair and a data-directory process lock; a second copy opens the existing service without rewriting adapters. Settings are saved atomically through stdin and regenerated into the existing chat/Codex configuration paths. An app-specific data root separates configuration, logs, CLI sessions and research state from both the read-only application bundle and the source checkout. Changing settings or quitting shuts down the worker before the server exits, retaining normal archival semantics. See [macOS Intel build contract](MACOS_INTEL.md) for source allowlists, relocation checks and release provenance.

@@ -9,7 +9,7 @@ import selectors
 import signal
 import threading
 from pathlib import Path
-from .config import ROOT, home, codex_environment
+from .config import ROOT, home, codex_environment, codex_runtime
 from .db import connection, utcnow, one, rows, uid, add_run_event
 from .research import research_context
 
@@ -190,6 +190,9 @@ def process_one(timeout_seconds: int = 600) -> dict | None:
         runtime = snapshot.get('codex_runtime')
         if not runtime:
             raise ValueError('Run has no isolated Codex runtime snapshot; create a new task')
+        current = codex_runtime()
+        if any(runtime[key] != current[key] for key in ('home', 'provider', 'base_url', 'env_key')):
+            raise ValueError('The API credential destination changed; create a new task in the current runtime')
         env = codex_environment(runtime)
         subprocess.run(['git', 'init', '-q', str(workdir)], check=True, timeout=15)
         source_run = item['parent_run_id']

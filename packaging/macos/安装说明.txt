@@ -1,0 +1,21 @@
+PDVL Studio — macOS Intel 预览版
+
+1. 将 PDVL Studio.app 拖入 Applications（应用程序）。
+2. 打开应用，填写你自己的 Ollama API key。默认模型是 DeepSeek Flash。
+   如使用其他兼容服务，可以修改 API 地址和模型；须另行验证代理工具兼容性。
+3. 程序会在默认浏览器打开本机工作台，无需安装 Python、Node 或 Codex。
+4. 从菜单栏 PDVL Studio → API 设置，可以修改配置并重启。
+   保存配置和退出应用会停止当前执行，并归档已产生的研究产物。
+
+研究数据和私有设置保存在：
+~/Library/Application Support/PDVL Studio
+升级或替换应用不会删除这些数据。退出应用后再备份整个目录。
+密钥不会进入分发包；调用模型 API 会向所填地址发送选定的研究上下文。
+日常 ChatGPT 和 Codex App 的订阅登录不受此应用的私有配置影响。
+
+本预览版使用临时签名，尚未进行 Apple Developer ID 签名和公证。
+从互联网下载后，macOS 可能要求你在“系统设置 → 隐私与安全性”中确认允许打开。
+请核对发布页提供的 SHA-256 校验值，不要关闭系统安全保护。
+
+最低系统版本：macOS 13，Intel x86_64。当前实测系统版本见 GitHub Release 说明。
+本机工作台仅监听 127.0.0.1；通过应用菜单退出会同时停止后台服务。

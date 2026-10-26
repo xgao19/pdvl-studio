@@ -18,13 +18,14 @@ from .prompts import MODE_PROMPTS, DEFAULT_SCIENTIFIC_VOICE
 from .research import project_snapshot, research_context, citation_ids
 from .providers import pick_model, models_public, generate, ProviderError
 from .verification import check, TESTS
+from . import __version__
 
 @asynccontextmanager
 async def lifespan(_app):
     init_db()
     yield
 
-app = FastAPI(title="PDVL Studio", version="0.1.0", docs_url="/api/docs", redoc_url=None, lifespan=lifespan)
+app = FastAPI(title="PDVL Studio", version=__version__, docs_url="/api/docs", redoc_url=None, lifespan=lifespan)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver", "[::1]"])
 app.mount("/static", StaticFiles(directory=ROOT / "web"), name="static")
 

@@ -1,0 +1,5 @@
+{
+  "base_url": "https://ollama.com/v1",
+  "model": "deepseek-v4.1-flash:1017",
+  "api_key": ""
+}
