@@ -4,6 +4,10 @@ import process from "node:process";
 
 function emit(obj) { process.stdout.write(JSON.stringify(obj) + "\n"); }
 
+const controller = new AbortController();
+process.on('SIGTERM', () => controller.abort());
+process.on('SIGINT', () => controller.abort());
+
 let raw = "";
 for await (const chunk of process.stdin) raw += chunk.toString();
 try {
@@ -24,7 +28,7 @@ try {
   if (task.model) options.model = task.model;
   const thread = task.thread_id ? codex.resumeThread(task.thread_id, options) : codex.startThread(options);
   let finalResponse = "";
-  const { events } = await thread.runStreamed(task.question);
+  const { events } = await thread.runStreamed(task.question, {signal: controller.signal});
   for await (const event of events) {
     if (event.type === "turn.failed") throw new Error(event.error?.message || "Codex turn failed");
     if (event.type === "item.completed" && event.item?.type === "agent_message") {
@@ -34,6 +38,10 @@ try {
   }
   emit({kind:"final", text:finalResponse, thread_id:thread.id || null});
 } catch (err) {
-  emit({kind:"error", message:String(err?.message || err).slice(0,1000)});
-  process.exitCode = 1;
+  if (controller.signal.aborted) {
+    emit({kind:'cancelled'});
+  } else {
+    emit({kind:"error", message:String(err?.message || err).slice(0,1000)});
+    process.exitCode = 1;
+  }
 }

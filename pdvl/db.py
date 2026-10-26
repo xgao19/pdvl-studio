@@ -96,6 +96,11 @@ def init_db():
             id TEXT PRIMARY KEY, run_id TEXT NOT NULL, name TEXT NOT NULL,
             content BLOB NOT NULL, sha256 TEXT NOT NULL, created_at TEXT NOT NULL,
             UNIQUE(run_id,name), FOREIGN KEY(run_id) REFERENCES runs(id));
+        CREATE TABLE IF NOT EXISTS run_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL,
+            kind TEXT NOT NULL, message TEXT NOT NULL, created_at TEXT NOT NULL,
+            FOREIGN KEY(run_id) REFERENCES runs(id));
+        CREATE INDEX IF NOT EXISTS idx_run_events ON run_events(run_id,id);
         """)
         if 'meta_json' not in {r['name'] for r in con.execute('PRAGMA table_info(messages)')}:
             con.execute("ALTER TABLE messages ADD COLUMN meta_json TEXT NOT NULL DEFAULT '{}'")
@@ -103,6 +108,14 @@ def init_db():
             con.execute("ALTER TABLE runs ADD COLUMN context_json TEXT NOT NULL DEFAULT '{}'")
         if 'artifact_id' not in {r['name'] for r in con.execute('PRAGMA table_info(evidence)')}:
             con.execute("ALTER TABLE evidence ADD COLUMN artifact_id TEXT REFERENCES artifacts(id)")
+        if 'parent_run_id' not in {r['name'] for r in con.execute('PRAGMA table_info(runs)')}:
+            con.execute('ALTER TABLE runs ADD COLUMN parent_run_id TEXT REFERENCES runs(id)')
+        con.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_run_parent ON runs(parent_run_id) WHERE parent_run_id IS NOT NULL')
+
+
+def add_run_event(con, rid: str, kind: str, message: str):
+    con.execute('INSERT INTO run_events(run_id,kind,message,created_at) VALUES (?,?,?,?)',
+                (rid, kind, message[:6000], utcnow()))
 
 
 def append_evidence(project_id: str, claim_id: str, kind: str, verdict: str,

@@ -51,6 +51,8 @@ In the CS-kernel demo, use **Run scoped physical check** on two claims. The RG d
 3. Choose an artifact and claim, describe its relevance, and **Record as evidence**. The initial verdict is `unresolved`; recording evidence never automatically verifies a claim.
 4. In **Write**, place the cursor at the relevant passage and choose **Cite in manuscript** beside an evidence record. Save a revision. Inline `[evidence:ID]` citations are checked against the project; reopening the draft restores its source links.
 
+In **Investigate**, task cards automatically show new progress while work is active. **取消任务** stops a queued or running task and preserves any archived partial work. Once stopped, use **继续运行** with an optional next question: this creates a linked task, resumes the same Codex session and restores archived files into a new workspace. The earlier task, evidence and manuscript sources remain intact. Tasks that never established a Codex session must be submitted anew. Project selection and task navigation remain available in the narrow in-app browser layout.
+
 The implementation adds one artifact table and reuses the existing revision reference field. Archives are limited to 10 MiB per run and reject symlinks. See [Architecture](docs/ARCHITECTURE.md) for the storage contract and migration behavior. Offline tests exercise the complete chain with a local mock agent; real provider/Codex authentication still requires separate testing.
 
 ### Run tests
@@ -59,9 +61,12 @@ The implementation adds one artifact table and reuses the existing revision refe
 pytest -q
 node --check worker/codex/index.mjs
 node --check web/app.js
+node --test tests/test_runs_ui.mjs
 ```
 
 Testing the actual Codex runtime and real provider responses requires authorized API credentials and runtime dependencies; unit and API tests use isolated temporary databases and mocked model responses.
+
+Local integration validation on 2026-10-25: DeepSeek Flash returned a real chat response. Codex SDK 0.164.0, using an existing ChatGPT login and GPT-6.1 Sol, executed a small SymPy calculation with a negative control. The run completed, ten artifacts were archived and hash-checked, and a scoped evidence record was cited in a saved and reloaded manuscript revision. A separate shared-function derivation checked the result; the claim remained `idea`. A second live test used the page to cancel a foreground command (its heartbeat stopped), then resumed the same session in a restored workspace and completed a short symbolic calculation. Old archive hashes and manuscript sources were unchanged. This validates this local setup and narrow calculation, not all providers or arbitrary physics. Private run records remain under `.local/`; the current offline suite has 29 Python tests and 2 Node UI tests.
 
 ### Source layout
 

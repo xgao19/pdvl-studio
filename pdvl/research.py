@@ -28,7 +28,7 @@ def project_snapshot(pid: str) -> dict:
                 'SELECT d.id,d.title,r.revision,r.text,r.evidence_refs FROM documents d '
                 'JOIN revisions r ON r.document_id=d.id AND r.revision=d.latest_revision '
                 'WHERE d.project_id=? ORDER BY d.rowid'),
-            'runs': records('SELECT id,title,state,output,error FROM runs WHERE project_id=? ORDER BY rowid'),
+            'runs': records('SELECT id,parent_run_id,title,state,output,error FROM runs WHERE project_id=? ORDER BY rowid'),
             'artifacts': records(
                 'SELECT a.id,a.run_id,a.name,a.sha256 FROM artifacts a JOIN runs r ON r.id=a.run_id '
                 'WHERE r.project_id=? ORDER BY a.rowid'),

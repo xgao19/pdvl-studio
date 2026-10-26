@@ -18,6 +18,12 @@ Set `CUSTOM_API_BASE`, `CUSTOM_API_KEY`, `CUSTOM_MODEL` to any OpenAI-compatible
 
 If supporting many providers, consider [LiteLLM](https://docs.litellm.ai/docs/) as an optional external gateway, but preserve a native Responses path for frontier-model-specific tools and capabilities; never silently drop unsupported tool arguments.
 
+## Codex authentication is separate from chat API keys
+
+The installed TypeScript SDK launches its pinned CLI runtime and uses the local Codex authentication store. An existing ChatGPT login was successfully used in the 2026-10-25 local smoke test; no OpenAI API key was supplied to that worker. The ordinary Discuss/Write provider calls still use the API keys described above. Do not copy Codex credentials into this repository or `.env`.
+
+Install the locked worker dependencies with `npm --prefix worker/codex ci`, confirm `codex login status`, set `PDVL_CODEX_ENABLED=1` in the private `.env`, and restart `./scripts/start.sh`. The script starts both the API and worker. For the live smoke test, the task explicitly selected `gpt-6.1-sol`; leaving the task model empty uses the configured Codex default. A successful login check alone does not establish a successful task run.
+
 ## Per-role model routing
 
 Model routing is stored under `discuss`, `investigate`, `verify`, and `write` keys in `configs/models.json`. You can change the selected model in the UI or set a new default in the registry. This is separate from Codex SDK model configuration. Record the actual model reported by providers for important research outcomes; snapshot aliases can move.

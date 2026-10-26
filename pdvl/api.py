@@ -3,7 +3,7 @@ import json
 import os
 from typing import Literal
 from urllib.parse import quote
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import PlainTextResponse
 from contextlib import asynccontextmanager
@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from markdown_it import MarkdownIt
 import bleach
 from .config import ROOT, model_settings
-from .db import init_db, one, rows, execute, uid, utcnow, append_evidence, connection
+from .db import init_db, one, rows, execute, uid, utcnow, append_evidence, connection, add_run_event
 from .prompts import MODE_PROMPTS, DEFAULT_SCIENTIFIC_VOICE
 from .research import project_snapshot, research_context, citation_ids
 from .providers import pick_model, models_public, generate, ProviderError
@@ -62,10 +62,13 @@ class NewEvidence(BaseModel):
     artifact_id: str | None = Field(default=None, min_length=1)
 
 class NewRun(BaseModel):
+    model_config = {'extra': 'forbid'}
     question: str = Field(min_length=1, max_length=10000)
     title: str = Field(default="Codex investigation", max_length=250)
     model_id: str | None = None
-    thread_id: str | None = None
+
+class ContinueRun(BaseModel):
+    message: str = Field(min_length=1, max_length=10000)
 
 class NewDocument(BaseModel):
     model_config = {'extra': 'forbid'}
@@ -211,7 +214,7 @@ def run_verification(pid: str, cid: str, test_id: str):
 def list_runs(pid: str):
     project_required(pid)
     return rows("SELECT id,project_id,title,question,state,agent,model_id,created_at,updated_at,"
-                "started_at,ended_at,output,error,thread_id FROM runs WHERE project_id=? ORDER BY rowid DESC", (pid,))
+                "started_at,ended_at,output,error,thread_id,parent_run_id FROM runs WHERE project_id=? ORDER BY rowid DESC", (pid,))
 
 @app.post("/api/projects/{pid}/runs", status_code=202)
 def start_run(pid: str, req: NewRun):
@@ -221,10 +224,12 @@ def start_run(pid: str, req: NewRun):
     rid = uid("r")
     now = utcnow()
     snapshot = json.dumps(project_snapshot(pid), ensure_ascii=False)
-    execute("INSERT INTO runs(id,project_id,title,question,state,agent,model_id,created_at,updated_at,thread_id,context_json) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (rid, pid, req.title, req.question, "queued", "codex-sdk",
-             req.model_id or os.getenv('PDVL_CODEX_MODEL') or None, now, now, req.thread_id, snapshot))
+    with connection() as con:
+        con.execute("INSERT INTO runs(id,project_id,title,question,state,agent,model_id,created_at,updated_at,context_json) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    (rid, pid, req.title, req.question, "queued", "codex-sdk",
+                     req.model_id or os.getenv('PDVL_CODEX_MODEL') or None, now, now, snapshot))
+        add_run_event(con, rid, 'queued', '任务已排队')
     return one("SELECT * FROM runs WHERE id=?", (rid,))
 
 @app.get("/api/runs/{rid}")
@@ -233,6 +238,56 @@ def get_run(rid: str):
     if not item:
         raise HTTPException(404, "Run not found")
     return item
+
+@app.get('/api/runs/{rid}/events')
+def run_events(rid: str, after: int = Query(default=0, ge=0)):
+    run = get_run(rid)
+    events = rows('SELECT * FROM run_events WHERE run_id=? AND id>? ORDER BY id LIMIT 101', (rid, after))
+    page = events[:100]
+    return {'events': page, 'cursor': page[-1]['id'] if page else after, 'has_more': len(events) > 100,
+            'state': run['state'], 'thread_id': run['thread_id']}
+
+@app.post('/api/runs/{rid}/cancel')
+def cancel_run(rid: str):
+    with connection() as con:
+        con.execute('BEGIN IMMEDIATE')
+        run = con.execute('SELECT * FROM runs WHERE id=?', (rid,)).fetchone()
+        if not run:
+            raise HTTPException(404, 'Run not found')
+        if run['state'] in ('cancelled', 'cancelling'):
+            return dict(run)
+        if run['state'] not in ('queued', 'running'):
+            raise HTTPException(409, 'This task is no longer active')
+        state = 'cancelled' if run['state'] == 'queued' else 'cancelling'
+        now = utcnow()
+        con.execute('UPDATE runs SET state=?,updated_at=?,ended_at=? WHERE id=?',
+                    (state, now, now if state == 'cancelled' else None, rid))
+        add_run_event(con, rid, state, '已取消排队任务' if state == 'cancelled' else '已请求取消，正在停止执行并归档已有产物')
+    return get_run(rid)
+
+@app.post('/api/runs/{rid}/continue', status_code=202)
+def continue_run(rid: str, req: ContinueRun):
+    if os.getenv('PDVL_CODEX_ENABLED', '0') != '1':
+        raise HTTPException(409, 'Codex worker disabled')
+    parent = get_run(rid)
+    snapshot = json.dumps(project_snapshot(parent['project_id']), ensure_ascii=False)
+    child = uid('r')
+    with connection() as con:
+        con.execute('BEGIN IMMEDIATE')
+        parent = con.execute('SELECT * FROM runs WHERE id=?', (rid,)).fetchone()
+        if parent['state'] not in ('completed', 'cancelled', 'failed', 'interrupted'):
+            raise HTTPException(409, 'Wait until this task has stopped before continuing it')
+        if not parent['thread_id']:
+            raise HTTPException(409, 'No Codex session was created; submit a new task')
+        if con.execute('SELECT 1 FROM runs WHERE parent_run_id=?', (rid,)).fetchone():
+            raise HTTPException(409, 'This task already has a continuation; continue its latest child instead')
+        now = utcnow()
+        con.execute('INSERT INTO runs(id,project_id,title,question,state,agent,model_id,created_at,updated_at,'
+                    'thread_id,context_json,parent_run_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                    (child, parent['project_id'], parent['title'], req.message, 'queued', parent['agent'],
+                     parent['model_id'], now, now, parent['thread_id'], snapshot, rid))
+        add_run_event(con, child, 'queued', '继续任务已排队；将复用会话并恢复上次归档的工作文件')
+    return get_run(child)
 
 @app.get('/api/runs/{rid}/artifacts')
 def run_artifacts(rid: str):

@@ -41,6 +41,16 @@ Manuscripts cite sources inline as `[evidence:e_...]`. Saving extracts and valid
 
 Startup adds the artifact table and the two new columns to existing databases without rewriting research records. Historical references remain stored. Previously queued tasks without a context snapshot fail explicitly and must be recreated; no present-day context is silently substituted for a missing historical input.
 
+## Task progress, cancellation and continuation
+
+The worker consumes JSONL events while Codex executes. `thread.started` immediately saves the thread ID; selected agent messages, command starts/completions and file changes are appended to `run_events`. Raw events remain in the archived trace. `GET /api/runs/{rid}/events?after=N` returns at most 100 entries plus a cursor and `has_more`. The page polls active tasks once per second, appends progress without rebuilding editable forms, and stops polling when tasks finish, the project/mode changes or the page is hidden. Reopening the page loads persisted progress.
+
+`POST /api/runs/{rid}/cancel` atomically changes `queued → cancelled` or `running → cancelling`. The worker runs the bridge in its own POSIX process group, requests termination (the bridge also aborts its SDK stream), and escalates after two seconds if necessary. The worker waits for termination and archives partial files before publishing `cancelled`. Timeouts use the same process cleanup. Graceful worker shutdown finalizes active work as `interrupted`; startup finalizes records left active by a previous worker. This is a single-worker local runtime, not a multi-host task broker.
+
+`POST /api/runs/{rid}/continue` accepts a new `message` after a task has stopped and has a saved thread ID. It freezes fresh project context and creates a child run with `parent_run_id`, the same model and thread ID, and a new workspace restored from the prior archive. An unstarted cancelled continuation has no workspace, so restoration follows its parent to the last actual execution. Files intentionally absent from an executed run are not recovered from older runs. Each run can have one child; a unique SQLite index prevents duplicate/concurrent continuation requests. Users continue the latest child rather than branching a shared Codex session.
+
+Continuation is the sole resume entry point; arbitrary `thread_id` input on new task creation was removed. It never rewrites the parent's artifacts, evidence or revisions. The only new storage is the progress table and a self-referencing parent column on `runs`; there is no separate broker or streaming service.
+
 ## Scientific review protocol
 
 A test must declare the **class of claim** it checks. The RG-difference verifier is valid for one algebraic identity under common anomalous dimension; it does not confirm a generic user claim, cross-process observability, finite-resolution phenomenology or uniqueness of an inverse reconstruction. No silent promotions beyond a canonical seeded claim with known statement and a narrow formal test.
@@ -57,6 +67,6 @@ A test must declare the **class of claim** it checks. The RG-difference verifier
 
 1. New tool plugins: arXiv/INSPIRE original-paper citations, PDF equation anchors, Mathematica/FORM, HDF5/ensemble metadata, interactive fit notebooks.
 2. User-approved HPC adapter: production directory allowlist, PBS/SLURM dry-run, explicit resource budget and approval tokens, auditable submits.
-3. Better task scheduling/interrupt: dedicated task broker and persistent subprocess monitors, only if concurrency grows beyond local SQLite queue.
+3. Multi-worker scheduling: add a dedicated broker only if concurrency grows beyond the current local SQLite worker.
 4. Dedicated desktop app or polished LaTeX editor: can reuse API and research state; requires no change to the inference/provider core.
 5. Multi-user deployment would require proper authentication, access control, encrypted secrets, per-project isolation and audit policies; **not supported by this local-only scaffold**.
